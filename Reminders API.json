@@ -1,0 +1,842 @@
+{
+  "name": "Reminders API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "={{$request.method}}",
+        "path": "api/reminders",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "webhook-main",
+      "name": "API Webhook",
+      "webhookId": "reminders-api-v1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate API Key\nconst apiKey = $input.item.json.headers['x-api-key'] || $input.item.json.query?.apiKey;\nconst VALID_API_KEY = 'YOUR_SECRET_API_KEY_HERE'; // Change this!\n\nif (!apiKey || apiKey !== VALID_API_KEY) {\n  return {\n    authorized: false,\n    error: 'Unauthorized: Invalid or missing API key'\n  };\n}\n\n// Parse request details\nconst method = $input.item.json.method || 'GET';\nconst path = $input.item.json.path || '';\nconst query = $input.item.json.query || {};\nconst body = $input.item.json.body || {};\n\n// Extract reminder ID from path if present (e.g., /api/reminders/123)\nconst pathParts = path.split('/').filter(p => p);\nlet reminderId = null;\nlet action = null;\n\nif (pathParts.length >= 3) {\n  reminderId = pathParts[2];\n}\nif (pathParts.length >= 4) {\n  action = pathParts[3]; // e.g., 'complete'\n}\n\n// Determine operation\nlet operation = 'list';\nif (method === 'GET' && !reminderId) {\n  operation = 'list';\n} else if (method === 'GET' && reminderId) {\n  operation = 'get';\n} else if (method === 'PUT' && reminderId) {\n  operation = 'update';\n} else if (method === 'DELETE' && reminderId) {\n  operation = 'delete';\n} else if (method === 'POST' && reminderId && action === 'complete') {\n  operation = 'complete';\n}\n\nreturn {\n  authorized: true,\n  operation,\n  reminderId,\n  method,\n  query,\n  body,\n  filters: {\n    category: query.category || null,\n    priority: query.priority || null,\n    date: query.date || null,\n    upcoming: query.upcoming === 'true',\n    completed: query.completed || null\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "parse-request",
+      "name": "Parse & Validate Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 0],
+      "id": "check-auth",
+      "name": "Check Auth"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error, success: false }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 120],
+      "id": "respond-unauthorized",
+      "name": "Respond Unauthorized"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "get",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "complete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [660, -120],
+      "id": "route-operation",
+      "name": "Route by Operation"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [880, -320],
+      "id": "read-all-reminders",
+      "name": "Read All Reminders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and format reminders for API response\nconst filters = $('Parse & Validate Request').item.json.filters;\nconst allReminders = $input.all();\n\nconst now = new Date();\nconst todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());\nconst todayEnd = new Date(todayStart);\ntodayEnd.setDate(todayEnd.getDate() + 1);\n\n// Group by calendarEventId to dedupe (multiple reminders per event)\nconst grouped = {};\nallReminders.forEach(item => {\n  const r = item.json;\n  const key = r.calendarEventId || r.reminderId;\n  \n  if (!grouped[key]) {\n    grouped[key] = {\n      id: r.reminderId,\n      calendarEventId: r.calendarEventId,\n      title: r.taskTitle,\n      description: r.taskDescription,\n      category: r.category || 'personal',\n      priority: r.priority || 'medium',\n      eventTime: r.eventTime,\n      sent: r.sent === 'true' || r.sent === true,\n      createdAt: r.createdAt,\n      reminderTimes: []\n    };\n  }\n  grouped[key].reminderTimes.push({\n    reminderId: r.reminderId,\n    reminderTime: r.reminderTime,\n    offsetMinutes: parseInt(r.offsetMinutes) || 0\n  });\n});\n\nlet reminders = Object.values(grouped);\n\n// Apply filters\nif (filters.category) {\n  reminders = reminders.filter(r => r.category === filters.category);\n}\n\nif (filters.priority) {\n  reminders = reminders.filter(r => r.priority === filters.priority);\n}\n\nif (filters.completed === 'true') {\n  reminders = reminders.filter(r => r.sent === true);\n} else if (filters.completed === 'false') {\n  reminders = reminders.filter(r => r.sent === false);\n}\n\nif (filters.upcoming) {\n  reminders = reminders.filter(r => {\n    const eventTime = new Date(r.eventTime);\n    return eventTime >= now;\n  });\n}\n\nif (filters.date === 'today') {\n  reminders = reminders.filter(r => {\n    const eventTime = new Date(r.eventTime);\n    return eventTime >= todayStart && eventTime < todayEnd;\n  });\n}\n\n// Sort by eventTime\nreminders.sort((a, b) => new Date(a.eventTime) - new Date(b.eventTime));\n\nreturn {\n  success: true,\n  count: reminders.length,\n  reminders\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -320],
+      "id": "format-list-response",
+      "name": "Format List Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, -320],
+      "id": "respond-list",
+      "name": "Respond List"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [880, -160],
+      "id": "read-for-get",
+      "name": "Read For Get",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find specific reminder by ID\nconst reminderId = $('Parse & Validate Request').item.json.reminderId;\nconst allReminders = $input.all();\n\nconst found = allReminders.filter(item => String(item.json.reminderId) === String(reminderId));\n\nif (found.length === 0) {\n  return {\n    success: false,\n    error: `Reminder ${reminderId} not found`\n  };\n}\n\nconst r = found[0].json;\nreturn {\n  success: true,\n  reminder: {\n    id: r.reminderId,\n    calendarEventId: r.calendarEventId,\n    title: r.taskTitle,\n    description: r.taskDescription,\n    category: r.category || 'personal',\n    priority: r.priority || 'medium',\n    eventTime: r.eventTime,\n    reminderTime: r.reminderTime,\n    offsetMinutes: parseInt(r.offsetMinutes) || 0,\n    sent: r.sent === 'true' || r.sent === true,\n    createdAt: r.createdAt\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -160],
+      "id": "format-get-response",
+      "name": "Format Get Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.success ? 200 : 404 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, -160],
+      "id": "respond-get",
+      "name": "Respond Get"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [880, 0],
+      "id": "read-for-update",
+      "name": "Read For Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare update data\nconst reminderId = $('Parse & Validate Request').item.json.reminderId;\nconst updateData = $('Parse & Validate Request').item.json.body;\nconst allReminders = $input.all();\n\nconst found = allReminders.filter(item => String(item.json.reminderId) === String(reminderId));\n\nif (found.length === 0) {\n  return {\n    success: false,\n    notFound: true,\n    error: `Reminder ${reminderId} not found`\n  };\n}\n\nconst existing = found[0].json;\n\n// Merge updates with existing data\nreturn {\n  success: true,\n  notFound: false,\n  reminderId: existing.reminderId,\n  taskTitle: updateData.title || existing.taskTitle,\n  taskDescription: updateData.description || existing.taskDescription,\n  category: updateData.category || existing.category,\n  priority: updateData.priority || existing.priority,\n  eventTime: updateData.eventTime || existing.eventTime,\n  reminderTime: existing.reminderTime,\n  offsetMinutes: existing.offsetMinutes,\n  chatId: existing.chatId,\n  calendarEventId: existing.calendarEventId,\n  sent: existing.sent,\n  createdAt: existing.createdAt\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "prepare-update",
+      "name": "Prepare Update"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "update-found-check",
+              "leftValue": "={{ $json.notFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1320, 0],
+      "id": "check-update-found",
+      "name": "Check Update Found"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error }) }}",
+        "options": {
+          "responseCode": 404,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 60],
+      "id": "respond-update-not-found",
+      "name": "Respond Update Not Found"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["reminderId"],
+          "schema": [
+            {"id": "reminderId", "displayName": "reminderId", "type": "string", "canBeUsedToMatch": true},
+            {"id": "taskTitle", "displayName": "taskTitle", "type": "string", "canBeUsedToMatch": true},
+            {"id": "taskDescription", "displayName": "taskDescription", "type": "string", "canBeUsedToMatch": true},
+            {"id": "category", "displayName": "category", "type": "string", "canBeUsedToMatch": true},
+            {"id": "priority", "displayName": "priority", "type": "string", "canBeUsedToMatch": true},
+            {"id": "eventTime", "displayName": "eventTime", "type": "string", "canBeUsedToMatch": true}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1540, -60],
+      "id": "do-update",
+      "name": "Do Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Reminder updated successfully' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, -60],
+      "id": "respond-update-success",
+      "name": "Respond Update Success"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [880, 160],
+      "id": "read-for-delete",
+      "name": "Read For Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find reminder to delete\nconst reminderId = $('Parse & Validate Request').item.json.reminderId;\nconst allReminders = $input.all();\n\nconst found = allReminders.filter(item => String(item.json.reminderId) === String(reminderId));\n\nif (found.length === 0) {\n  return {\n    success: false,\n    notFound: true,\n    error: `Reminder ${reminderId} not found`\n  };\n}\n\nreturn {\n  ...found[0].json,\n  success: true,\n  notFound: false\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 160],
+      "id": "find-for-delete",
+      "name": "Find For Delete"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "delete-found-check",
+              "leftValue": "={{ $json.notFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1320, 160],
+      "id": "check-delete-found",
+      "name": "Check Delete Found"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error }) }}",
+        "options": {
+          "responseCode": 404,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 220],
+      "id": "respond-delete-not-found",
+      "name": "Respond Delete Not Found"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "startIndex": "={{ $json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1540, 100],
+      "id": "do-delete",
+      "name": "Do Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Reminder deleted successfully' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 100],
+      "id": "respond-delete-success",
+      "name": "Respond Delete Success"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [880, 320],
+      "id": "read-for-complete",
+      "name": "Read For Complete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find reminder to mark complete\nconst reminderId = $('Parse & Validate Request').item.json.reminderId;\nconst allReminders = $input.all();\n\nconst found = allReminders.filter(item => String(item.json.reminderId) === String(reminderId));\n\nif (found.length === 0) {\n  return {\n    success: false,\n    notFound: true,\n    error: `Reminder ${reminderId} not found`\n  };\n}\n\nconst existing = found[0].json;\nreturn {\n  ...existing,\n  sent: 'true',\n  success: true,\n  notFound: false\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 320],
+      "id": "prepare-complete",
+      "name": "Prepare Complete"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "complete-found-check",
+              "leftValue": "={{ $json.notFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1320, 320],
+      "id": "check-complete-found",
+      "name": "Check Complete Found"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error }) }}",
+        "options": {
+          "responseCode": 404,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 380],
+      "id": "respond-complete-not-found",
+      "name": "Respond Complete Not Found"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["reminderId"],
+          "schema": [
+            {"id": "reminderId", "displayName": "reminderId", "type": "string", "canBeUsedToMatch": true},
+            {"id": "sent", "displayName": "sent", "type": "string", "canBeUsedToMatch": true}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1540, 260],
+      "id": "do-complete",
+      "name": "Do Complete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Reminder marked as completed' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 260],
+      "id": "respond-complete-success",
+      "name": "Respond Complete Success"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "API Webhook": {
+      "main": [[{"node": "Parse & Validate Request", "type": "main", "index": 0}]]
+    },
+    "Parse & Validate Request": {
+      "main": [[{"node": "Check Auth", "type": "main", "index": 0}]]
+    },
+    "Check Auth": {
+      "main": [
+        [{"node": "Route by Operation", "type": "main", "index": 0}],
+        [{"node": "Respond Unauthorized", "type": "main", "index": 0}]
+      ]
+    },
+    "Route by Operation": {
+      "main": [
+        [{"node": "Read All Reminders", "type": "main", "index": 0}],
+        [{"node": "Read For Get", "type": "main", "index": 0}],
+        [{"node": "Read For Update", "type": "main", "index": 0}],
+        [{"node": "Read For Delete", "type": "main", "index": 0}],
+        [{"node": "Read For Complete", "type": "main", "index": 0}]
+      ]
+    },
+    "Read All Reminders": {
+      "main": [[{"node": "Format List Response", "type": "main", "index": 0}]]
+    },
+    "Format List Response": {
+      "main": [[{"node": "Respond List", "type": "main", "index": 0}]]
+    },
+    "Read For Get": {
+      "main": [[{"node": "Format Get Response", "type": "main", "index": 0}]]
+    },
+    "Format Get Response": {
+      "main": [[{"node": "Respond Get", "type": "main", "index": 0}]]
+    },
+    "Read For Update": {
+      "main": [[{"node": "Prepare Update", "type": "main", "index": 0}]]
+    },
+    "Prepare Update": {
+      "main": [[{"node": "Check Update Found", "type": "main", "index": 0}]]
+    },
+    "Check Update Found": {
+      "main": [
+        [{"node": "Respond Update Not Found", "type": "main", "index": 0}],
+        [{"node": "Do Update", "type": "main", "index": 0}]
+      ]
+    },
+    "Do Update": {
+      "main": [[{"node": "Respond Update Success", "type": "main", "index": 0}]]
+    },
+    "Read For Delete": {
+      "main": [[{"node": "Find For Delete", "type": "main", "index": 0}]]
+    },
+    "Find For Delete": {
+      "main": [[{"node": "Check Delete Found", "type": "main", "index": 0}]]
+    },
+    "Check Delete Found": {
+      "main": [
+        [{"node": "Respond Delete Not Found", "type": "main", "index": 0}],
+        [{"node": "Do Delete", "type": "main", "index": 0}]
+      ]
+    },
+    "Do Delete": {
+      "main": [[{"node": "Respond Delete Success", "type": "main", "index": 0}]]
+    },
+    "Read For Complete": {
+      "main": [[{"node": "Prepare Complete", "type": "main", "index": 0}]]
+    },
+    "Prepare Complete": {
+      "main": [[{"node": "Check Complete Found", "type": "main", "index": 0}]]
+    },
+    "Check Complete Found": {
+      "main": [
+        [{"node": "Respond Complete Not Found", "type": "main", "index": 0}],
+        [{"node": "Do Complete", "type": "main", "index": 0}]
+      ]
+    },
+    "Do Complete": {
+      "main": [[{"node": "Respond Complete Success", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "api-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "reminders-api",
+  "tags": []
+}

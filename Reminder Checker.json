@@ -1,0 +1,445 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        -32
+      ],
+      "id": "fe471b43-afce-4caf-abd2-45abcb52df6b",
+      "name": "Every 5 Minutes"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        -816,
+        -32
+      ],
+      "id": "9721f250-73a0-4e3f-bb02-3fb7b3bca774",
+      "name": "Get All Reminders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter reminders that are due NOW and not yet sent\nconst now = new Date();\nconst dueReminders = [];\n\nfor (const item of $input.all()) {\n  const reminder = item.json;\n  \n  // Skip if already sent\n  if (reminder.sent === true || reminder.sent === 'TRUE' || reminder.sent === 'true') {\n    continue;\n  }\n  \n  // Parse reminder time and add EST timezone offset\n  // Your times are stored as local EST but parsed as UTC, so we need to add 5 hours\n  const reminderTime = new Date(reminder.reminderTime);\n  const estOffset = 5 * 60 * 60 * 1000; // 5 hours in milliseconds\n  const reminderTimeEST = new Date(reminderTime.getTime() + estOffset);\n  \n  // Calculate time difference (positive if reminder is in the past)\n  const timeDiff = now - reminderTimeEST;\n  \n  // Catch reminders within the last 6 hours (to handle timezone issues and missed checks)\n  const sixHours = 6 * 60 * 60 * 1000;\n  \n  // Due if: reminderTime has passed AND within last 6 hours (to catch missed ones)\n  if (timeDiff >= 0 && timeDiff <= sixHours) {\n    dueReminders.push({\n      rowNumber: reminder.rowNumber,\n      taskTitle: reminder.taskTitle,\n      taskDescription: reminder.taskDescription,\n      eventTime: reminder.eventTime,\n      reminderTime: reminder.reminderTime,\n      offsetMinutes: reminder.offsetMinutes,\n      chatId: reminder.chatId,\n      calendarEventId: reminder.calendarEventId,\n      reminderId: reminder.reminderId\n    });\n  }\n}\n\nif (dueReminders.length === 0) {\n  // Stop execution if no reminders due\n  return [];\n}\n\nreturn dueReminders;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        -32
+      ],
+      "id": "eda2b50f-10c6-4f41-8be7-557db0b7a063",
+      "name": "Filter Due Reminders"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        -32
+      ],
+      "id": "9381ed1f-3ff9-44e4-af9d-cc406eca1e3b",
+      "name": "Has Reminders?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format reminder message for each due reminder\nconst reminder = $json;\n\n// Format event time\nconst eventTime = new Date(reminder.eventTime + ' EST');\nconst formattedEventTime =\n  eventTime.toLocaleString('en-US', {\n    timeZone: 'America/New_York',\n    month: 'short',\n    day: 'numeric',\n    year: 'numeric',\n    hour: 'numeric',\n    minute: '2-digit',\n    hour12: true\n  });\n\n// Calculate how long until event\nconst now = new Date();\nconst timeUntilEvent = eventTime - now;\nconst hoursUntil = Math.floor(timeUntilEvent / (1000 * 60 * 60));\nconst minutesUntil = Math.floor((timeUntilEvent % (1000 * 60 * 60)) / (1000 * 60));\n\nlet timeUntilText = '';\nif (hoursUntil === 0 && minutesUntil === 0) {\n    timeUntilText = 'NOW!';\n} else if (hoursUntil === 0) {\n    timeUntilText = `in ${minutesUntil} minutes`;\n} else if (hoursUntil < 24) {\n    timeUntilText = `in ${hoursUntil}h ${minutesUntil}m`;\n} else {\n    const daysUntil = Math.floor(hoursUntil / 24);\n    timeUntilText = `in ${daysUntil} days`;\n}\n\n// Build message\nconst telegramMessage = `⏰ *Reminder*\\n\\n*${reminder.taskTitle}*\\n${reminder.taskDescription || ''}\\n\\n📅 Event time: ${formattedEventTime}\\n⏱ Time until: ${timeUntilText}`;\n\nconst emailSubject = `⏰ Reminder: ${reminder.taskTitle}`;\nconst emailBody = `<h2>⏰ Reminder</h2>\\n<h3>${reminder.taskTitle}</h3>\\n<p>${reminder.taskDescription || ''}</p>\\n<p><strong>Event Time:</strong> ${formattedEventTime}</p>\\n<p><strong>Time Until:</strong> ${timeUntilText}</p>\\n<hr>\\n<p><small>This is an automated reminder from your Telegram Reminder Bot</small></p>`;\n\nreturn {\n    rowNumber: reminder.rowNumber,\n    chatId: reminder.chatId,\n    telegramMessage,\n    emailSubject,\n    emailBody,\n    reminderId: reminder.reminderId\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -160
+      ],
+      "id": "b0c6172d-b0cf-4192-a956-d8808a563534",
+      "name": "Format Reminder Message"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        -240
+      ],
+      "id": "94807e36-cf4f-4b23-bc90-783427ba4c41",
+      "name": "Send Telegram Reminder",
+      "webhookId": "ed714110-e91e-4baf-825e-10d15de96c23",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "sebastian.08ld@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        64,
+        -80
+      ],
+      "id": "8223f64b-971c-4015-9141-b02072f20dcf",
+      "name": "Send Gmail Reminder",
+      "webhookId": "6c952a97-a215-49ef-96a7-66ec5015ae6e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "M0aDvA8YtvyzvHLm",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sent": "true",
+            "reminderId": "={{ $('Format Reminder Message').item.json.reminderId }}"
+          },
+          "matchingColumns": [
+            "reminderId"
+          ],
+          "schema": [
+            {
+              "id": "reminderId",
+              "displayName": "reminderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "taskTitle",
+              "displayName": "taskTitle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "taskDescription",
+              "displayName": "taskDescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "eventTime",
+              "displayName": "eventTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "reminderTime",
+              "displayName": "reminderTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "offsetMinutes",
+              "displayName": "offsetMinutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "chatId",
+              "displayName": "chatId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "calendarEventId",
+              "displayName": "calendarEventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "sent",
+              "displayName": "sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "createdAt",
+              "displayName": "createdAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        576,
+        -144
+      ],
+      "id": "a1740274-2ea5-4014-a30c-5299d0f46fbf",
+      "name": "Mark As Sent",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        384,
+        -144
+      ],
+      "id": "bc3aa17a-c1c6-445f-849d-39857138272d",
+      "name": "Merge"
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get All Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Reminders": {
+      "main": [
+        [
+          {
+            "node": "Filter Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Due Reminders": {
+      "main": [
+        [
+          {
+            "node": "Has Reminders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Reminders?": {
+      "main": [
+        [
+          {
+            "node": "Format Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reminder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Gmail Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Reminder": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Reminder": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Mark As Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4caad13a6a57f185d556683cb8a7b8ef03aea0af46fb43e9ead47193f8d45e9e"
+  }
+}
+

@@ -1,0 +1,1829 @@
+{
+  "name": "Telegram reminder bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "65e7a10e-27b7-4621-84ed-3d489ef5e2d4",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2144,
+        2848
+      ],
+      "id": "b79aa0ac-d261-448f-a30a-a7a491e93553",
+      "name": "Webhook",
+      "webhookId": "65e7a10e-27b7-4621-84ed-3d489ef5e2d4",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const telegramData = $input.item.json.body;\n\n// CRITICAL DEBUGGING: Log the entire incoming payload\nconsole.log('=== INCOMING TELEGRAM UPDATE ===' );\nconsole.log('Update ID:', telegramData?.update_id);\nconsole.log('Message ID:', telegramData?.message?.message_id);\nconsole.log('Message Text:', telegramData?.message?.text);\nconsole.log('From User:', telegramData?.message?.from?.username);\nconsole.log('Is Bot:', telegramData?.message?.from?.is_bot);\nconsole.log('Chat ID:', telegramData?.message?.chat?.id);\nconsole.log('Has edited_message:', !!telegramData?.edited_message);\nconsole.log('Has channel_post:', !!telegramData?.channel_post);\nconsole.log('Has callback_query:', !!telegramData?.callback_query);\nconsole.log('Full payload keys:', Object.keys(telegramData));\n\n// CRITICAL FIX: Ignore messages sent by the bot itself AND update messages to prevent infinite loops\nconst updateId = telegramData?.update_id;\nconst messageFrom = telegramData?.message?.from;\nconst hasMessage = telegramData?.message;\nconst messageText = telegramData?.message?.text || '';\n\n// Block 1: Ignore edited messages, channel posts, callbacks\nif (telegramData?.edited_message || telegramData?.channel_post || telegramData?.callback_query) {\n  console.log('BLOCKED: Non-message update type');\n  return []; // Return empty array to stop workflow without error\n}\n\n// Block 2: Ignore if no message object\nif (!hasMessage) {\n  console.log('BLOCKED: No message object');\n  return []; // Return empty array to stop workflow without error\n}\n\n// Block 3: Ignore messages from bots\nif (!messageFrom || messageFrom.is_bot === true) {\n  console.log('BLOCKED: Message from bot or no sender info');\n  return []; // Return empty array to stop workflow without error\n}\n\n// Block 4: Ignore empty messages (safety check)\nif (!messageText && !telegramData?.message?.voice) {\n  console.log('BLOCKED: Empty message with no text or voice');\n  return []; // Return empty array to stop workflow without error\n}\n\nconsole.log('PASSED ALL CHECKS - Processing message');\n\nconst voiceMessage = telegramData?.message?.voice || null;\nconst chatId = telegramData?.message?.from?.id || '';\nconst messageId = telegramData?.message?.message_id || '';\n\n// Get current time in Eastern timezone for context\nconst now = new Date();\nconst easternTime = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/New_York',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n  hour: '2-digit',\n  minute: '2-digit',\n  second: '2-digit',\n  hour12: false\n}).format(now);\n\n// Determine message type\nconst isVoice = voiceMessage !== null;\nconst fileId = voiceMessage?.file_id || null;\n\nreturn {\n  messageText,\n  isVoice,\n  fileId,\n  chatId,\n  messageId,\n  currentTime: easternTime,\n  originalPayload: telegramData\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        2848
+      ],
+      "id": "aa37a0e7-bc87-4fa4-b711-c081d90eede2",
+      "name": "Extract Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bdb33969-4f5b-4874-a2cd-4b7b7a3a21a7",
+              "leftValue": "={{ $json.originalPayload.message.voice.duration }}",
+              "rightValue": -0.1,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1696,
+        2848
+      ],
+      "id": "8de262d2-a719-481f-aff5-da1b8c4101d4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot8505773453:AAH9P6D1ZIzYO0_nBksINhiPozGpiRRFL4o/getFile?file_id={{ $json.originalPayload.message.voice.file_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1456,
+        2656
+      ],
+      "id": "10d27004-8c0a-4342-87d0-e9ec7542f57d",
+      "name": "Get file info"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/file/bot8505773453:AAH9P6D1ZIzYO0_nBksINhiPozGpiRRFL4o/{{ $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1280,
+        2656
+      ],
+      "id": "30bf05b9-283f-493a-93ed-6525788d2594",
+      "name": "Download Voice File"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "=file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1104,
+        2656
+      ],
+      "id": "2e971d18-7391-4e98-b89d-29acfa5c81d5",
+      "name": "Transcribe with Whisper",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JSHp7DQUi6PScVXz",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract transcribed text and format for next node\nconst transcribedText = $json.text || '';\nconst chatId = $('Extract Message').item.json.chatId;\nconst currentTime = $('Extract Message').item.json.currentTime;\n\nreturn {\n  messageText: transcribedText,\n  chatId,\n  currentTime,\n  isVoice: true,\n  originalPayload: $('Extract Message').item.json.originalPayload\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -912,
+        2656
+      ],
+      "id": "f3d7623c-15f9-489d-b078-1fb4be412a7c",
+      "name": "Prepare Transcribed Tex"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format text message for merging\nreturn {\n  messageText: $json.messageText,\n  chatId: $json.chatId,\n  currentTime: $json.currentTime,\n  isVoice: false,\n  originalPayload: $json.originalPayload\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        2864
+      ],
+      "id": "6d86433e-d268-43d8-967a-a6e6d07b5c15",
+      "name": "Prepare Text Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detect intent from message text\nconst messageText = $json.messageText.toLowerCase();\n\n// Intent detection patterns\nconst queryPatterns = [\n  /show.*reminders?/,\n  /list.*reminders?/,\n  /what.*reminders?/,\n  /view.*reminders?/,\n  /get.*reminders?/,\n  /display.*reminders?/,\n  /see.*reminders?/,\n  /my reminders?/,\n  /upcoming/,\n  /today'?s/,\n  /this week/,\n  /tomorrow'?s/\n];\n\nconst editPatterns = [\n  /edit/,\n  /update/,\n  /change/,\n  /modify/,\n  /reschedule/,\n  /move.*reminder/,\n  /postpone/,\n  /adjust/\n];\n\nconst deletePatterns = [\n  /delete/,\n  /remove/,\n  /cancel/,\n  /clear/,\n  /erase/,\n  /get rid of/\n];\n\nlet intent = 'create'; // default\n\nif (queryPatterns.some(pattern => pattern.test(messageText))) {\n  intent = 'query';\n} else if (editPatterns.some(pattern => pattern.test(messageText))) {\n  intent = 'edit';\n} else if (deletePatterns.some(pattern => pattern.test(messageText))) {\n  intent = 'delete';\n}\n\nreturn {\n  ...($json),\n  intent\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        2864
+      ],
+      "id": "dabf688a-a68d-43b0-a7de-af8dcc18b3f6",
+      "name": "Detect Intent"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "create",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c72bed09-b143-47c7-a470-45c325e86af8"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "query",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "760d6db6-eebf-4ac7-bbd2-467916f1244f"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c98d8614-4176-485b-9c27-fcbc30d36735"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "53f81517-e4c9-4670-bf44-283094689738"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -496,
+        2864
+      ],
+      "id": "5caeb81b-a714-4156-8f96-ddb712bf5582",
+      "name": "Route by Intent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Current time in Eastern timezone: {{$json.currentTime}}\\n\\nUser message: {{$json.messageText}}\"\n        }\n      ]\n    }\n  ],\n  \"systemInstruction\": {\n    \"parts\": [\n      {\n        \"text\": \"You are a reminder parsing assistant. The user will send messy, conversational text describing tasks and deadlines.\\n\\nRULES:\\n1. Return ONLY valid JSON, no explanatory text\\n2. All datetime_iso values MUST be explicit ISO 8601 format with Eastern timezone offset (-05:00 for EST or -04:00 for EDT)\\n3. NEVER use relative times - always resolve to concrete datetime based on current time provided\\n4. Support multiple tasks in a single message\\n\\nCATEGORY DETECTION:\\nAutomatically detect the task category based on keywords:\\n- \\\"homework\\\", \\\"assignment\\\", \\\"study\\\", \\\"exam\\\", \\\"test\\\", \\\"quiz\\\" → category: \\\"homework\\\"\\n- \\\"application\\\", \\\"apply\\\", \\\"submit application\\\", \\\"deadline for\\\", \\\"college\\\", \\\"university\\\" → category: \\\"applications\\\"\\n- \\\"gym\\\", \\\"workout\\\", \\\"exercise\\\", \\\"run\\\", \\\"lift\\\", \\\"fitness\\\" → category: \\\"gym\\\"\\n- \\\"call\\\", \\\"text\\\", \\\"message\\\", \\\"birthday\\\", \\\"mom\\\", \\\"dad\\\", \\\"friend\\\" → category: \\\"personal\\\"\\n- \\\"work\\\", \\\"meeting\\\", \\\"project\\\", \\\"presentation\\\", \\\"report\\\", \\\"deadline\\\" → category: \\\"work\\\"\\n- Default if no match → category: \\\"personal\\\"\\n\\nPRIORITY DETECTION:\\nParse priority from the message:\\n- If contains \\\"high priority\\\", \\\"urgent\\\", \\\"important\\\", \\\"ASAP\\\", \\\"critical\\\" → priority: \\\"high\\\"\\n- If contains \\\"low priority\\\", \\\"optional\\\", \\\"if I can\\\", \\\"maybe\\\" → priority: \\\"low\\\"\\n- Default → priority: \\\"medium\\\"\\n\\nSMART TIME LOGIC:\\nWhen user specifies a time without a date (e.g., \\\"5 PM\\\"):\\n- Parse the time and compare to current time\\n- If specified time has ALREADY PASSED today, assume TOMORROW\\n- If specified time is LATER today, use TODAY\\n- Examples:\\n  * Current: 11:41 PM, User says \\\"5 PM\\\" → Tomorrow at 5 PM (already passed)\\n  * Current: 2:00 PM, User says \\\"5 PM\\\" → Today at 5 PM (hasn't happened yet)\\n  * Current: 11:30 PM, User says \\\"11:45 PM\\\" → Today at 11:45 PM (15 min away)\\n\\nREMINDER TIME INTERPRETATION - CRITICAL:\\nWhen user says \\\"remind me at [time(s)]\\\" or \\\"remind me [day] at [time(s)]\\\":\\n- These are ABSOLUTE times when the user wants to receive reminders\\n- You MUST calculate the offset from the EVENT time, not treat them as offsets\\n- The event time might be different from (or the same as) the reminder times\\n\\nSTEPS FOR \\\"REMIND ME AT\\\" LOGIC:\\n1. First, determine the EVENT datetime (when the task actually happens)\\n2. Then, parse each reminder time as an absolute datetime\\n3. Calculate offset: (event_datetime - reminder_datetime) in minutes\\n4. If reminder is AFTER the event, skip it (invalid)\\n\\nEXAMPLES:\\nExample 1: \\\"Homework due tomorrow at 3 PM, remind me tomorrow at 1 PM and 2 PM\\\"\\n- Event: Tomorrow 3 PM\\n- Reminder 1: Tomorrow 1 PM → Offset: 120 minutes (2 hours before event)\\n- Reminder 2: Tomorrow 2 PM → Offset: 60 minutes (1 hour before event)\\n- Result: reminder_offsets_minutes: [120, 60]\\n\\nExample 2: \\\"Ask Mr. Calderon about field trip. Remind me tomorrow at 7 AM, 10 AM, 11 AM, 12 PM\\\"\\n- Event: Since no specific event time mentioned, default to noon (12 PM) on the day referenced\\n- Event: Tomorrow 12 PM\\n- Reminder 1: Tomorrow 7 AM → Offset: 300 minutes (5 hours before)\\n- Reminder 2: Tomorrow 10 AM → Offset: 120 minutes (2 hours before)\\n- Reminder 3: Tomorrow 11 AM → Offset: 60 minutes (1 hour before)\\n- Reminder 4: Tomorrow 12 PM → Offset: 0 minutes (at event time)\\n- Result: reminder_offsets_minutes: [300, 120, 60, 0]\\n\\nExample 3: \\\"Meeting at 5 PM, remind me in 30 minutes\\\"\\n- Current time: 2:00 PM\\n- Event: Today 5 PM\\n- Reminder: Current time + 30 min = 2:30 PM\\n- Offset: 5:00 PM - 2:30 PM = 150 minutes\\n- Result: reminder_offsets_minutes: [150]\\n\\nExample 4: \\\"Meeting at 5 PM, remind me 30 minutes before\\\"\\n- Event: Today 5 PM  \\n- Reminder: 30 minutes before event = 4:30 PM\\n- Offset: 30 minutes\\n- Result: reminder_offsets_minutes: [30]\\n\\nIMPORTANT TIMING RULES:\\n- \\\"remind me at [time]\\\" = Absolute time → Calculate offset from event\\n- \\\"remind me in X\\\" or \\\"in X minutes/hours/days\\\" = Relative to NOW → Calculate absolute time, then offset from event\\n- \\\"remind me X before\\\" or \\\"X before the event\\\" = Relative to EVENT → Direct offset\\n- \\\"now\\\" or \\\"right now\\\" = Use current time → Calculate offset from event\\n\\nDEFAULT EVENT TIME:\\nWhen no specific event time is mentioned but a day is referenced:\\n- Use 12:00 PM (noon) as the default event time on that day\\n- Example: \\\"Remind me tomorrow at 8 AM\\\" → Event: Tomorrow 12 PM, Reminder: Tomorrow 8 AM, Offset: 240 minutes\\n\\nWhen user does NOT explicitly mention reminders, use these defaults:\\n- Event >24h away: [1440] (1 day before)\\n- Event 3-24h away: [120, 60, 30] (2h, 1h, 30m before)\\n- Event <3h away: [30] (30m before)\\n\\nOUTPUT FORMAT:\\n{\\n  \\\"tasks\\\": [\\n    {\\n      \\\"action\\\": \\\"create\\\",\\n      \\\"title\\\": \\\"short title\\\",\\n      \\\"description\\\": \\\"longer description\\\",\\n      \\\"datetime_iso\\\": \\\"2025-12-20T15:00:00-05:00\\\",\\n      \\\"reminder_offsets_minutes\\\": [120, 60, 30],\\n      \\\"category\\\": \\\"homework\\\",\\n      \\\"priority\\\": \\\"medium\\\",\\n      \\\"source_text\\\": \\\"exact quote from user\\\"\\n    }\\n  ]\\n}\\n\\nREMINDER OFFSET CONVERSIONS:\\n- 30 days = 43200 minutes\\n- 7 days = 10080 minutes\\n- 1 day = 1440 minutes\\n- 12 hours = 720 minutes\\n- 5 hours = 300 minutes\\n- 2 hours = 120 minutes\\n- 1 hour = 60 minutes\\n- 30 minutes = 30 minutes\\n- 5 minutes = 5 minutes\\n- 1 minute = 1 minute\\n- Day of (exact time) = 0 minutes\\n- CUSTOM: Always calculate as (event_time - reminder_time) in minutes\"\n      }\n    ]\n  },\n  \"generationConfig\": {\n    \"temperature\": 0.1,\n    \"responseMimeType\": \"application/json\"\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -176,
+        2656
+      ],
+      "id": "261e9a88-4f7a-494c-ba83-632640229ea2",
+      "name": "Call Gemini API",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ASbHGphXduyqdHes",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate Gemini response\ntry {\n  const response = $input.item.json;\n  let responseText = '';\n  \n  // Handle raw HTTP API response\n  if (response.candidates && response.candidates[0]) {\n    const content = response.candidates[0].content;\n    if (content.parts && content.parts[0]) {\n      responseText = content.parts[0].text;\n    }\n  }\n  \n  if (!responseText) {\n    throw new Error('No text in Gemini response');\n  }\n  \n  // Clean up any markdown code blocks if present\n  responseText = responseText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  // Parse the JSON\n  const parsedTasks = JSON.parse(responseText);\n  \n  // Validate structure\n  if (!parsedTasks.tasks || !Array.isArray(parsedTasks.tasks)) {\n    throw new Error('Invalid JSON structure: missing tasks array');\n  }\n  \n  if (parsedTasks.tasks.length === 0) {\n    throw new Error('No tasks found in response');\n  }\n  \n  // Validate each task has required fields\n  parsedTasks.tasks.forEach((task, index) => {\n    if (!task.datetime_iso) {\n      throw new Error(`Task ${index + 1} missing datetime_iso`);\n    }\n    if (!task.title) {\n      throw new Error(`Task ${index + 1} missing title`);\n    }\n    if (!task.reminder_offsets_minutes || !Array.isArray(task.reminder_offsets_minutes)) {\n      throw new Error(`Task ${index + 1} missing or invalid reminder_offsets_minutes`);\n    }\n    // NEW: Validate category\n    if (!task.category || typeof task.category !== 'string') {\n      throw new Error(`Task ${index + 1} missing or invalid category`);\n    }\n    // NEW: Validate priority\n    const validPriorities = ['high', 'medium', 'low'];\n    if (!task.priority || !validPriorities.includes(task.priority)) {\n      throw new Error(`Task ${index + 1} missing or invalid priority (must be high/medium/low)`);\n    }\n  });\n  \n  // Return success with parsed tasks\n  return {\n    success: true,\n    tasks: parsedTasks.tasks,\n    taskCount: parsedTasks.tasks.length,\n    originalMessage: $('Detect Intent').item.json.messageText,\n    chatId: $('Detect Intent').item.json.chatId,\n    currentTime: $('Detect Intent').item.json.currentTime\n  };\n  \n} catch (error) {\n  // Return error for branching\n  return {\n    success: false,\n    error: error.message,\n    originalMessage: $('Detect Intent').item.json.messageText,\n    chatId: $('Detect Intent').item.json.chatId,\n    geminiRawResponse: JSON.stringify($input.item.json, null, 2)\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        2656
+      ],
+      "id": "17c064c7-3bc2-4a17-92e1-678a9958668c",
+      "name": "Parse & Validate JSON"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        272,
+        2656
+      ],
+      "id": "7984d643-a030-4da5-8254-cfdb4521d16e",
+      "name": "Check Success"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Current time: {{ $json.currentTime }}\nOriginal message: {{ $json.originalMessage }}\n\nTasks to validate and enhance:\n{{ JSON.stringify($json.tasks, null, 2) }}\n\nPlease return the improved task array in the exact same JSON format."
+            }
+          ]
+        },
+        "options": {
+          "systemMessage": "You are an intelligent task validator and enhancer. You receive parsed tasks and your job is to:\n\n1. VALIDATE each task makes logical sense\n2. VERIFY datetime_iso values are correct for the context\n3. ENHANCE descriptions to be more actionable and clear\n4. ADJUST reminder timings if they don't make sense\n5. FIX any timezone or datetime issues\n6. ENSURE tasks are actually doable\n7. PRESERVE category and priority fields\n\nRULES:\n- Current time is in Eastern timezone\n- If a datetime seems wrong (like past time for future event), FIX it\n- If description is vague, ENHANCE it based on context\n- If reminders are excessive/insufficient, ADJUST them intelligently\n- DO NOT change category or priority unless clearly wrong\n- Return the SAME JSON structure you receive, but improved\n\nEXAMPLE IMPROVEMENTS:\n- \"do homework\" → \"Complete and submit homework assignment\"\n- Datetime that passed → Correct to next valid occurrence\n- Too many reminders for simple task → Reduce to reasonable amount\n- Missing context → Add based on title\n\nRETURN ONLY THE JSON ARRAY OF TASKS, no explanatory text.",
+          "maxOutputTokens": 4096,
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        480,
+        2528
+      ],
+      "id": "3938a3ab-fd37-4f4f-9d4b-1e8c9df4706e",
+      "name": "AI Task Enhancer",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ASbHGphXduyqdHes",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract enhanced tasks from AI response and prepare for splitting\ntry {\n  const aiResponse = $input.item.json.message || $input.item.json;\n  \n  // Clean up response\n  let cleanedResponse = aiResponse;\n  if (typeof aiResponse === 'string') {\n    cleanedResponse = aiResponse.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  }\n  \n  // Parse if string, otherwise use as-is\n  const enhancedTasks = typeof cleanedResponse === 'string' \n    ? JSON.parse(cleanedResponse) \n    : cleanedResponse;\n  \n  // Handle if AI returned object with tasks property or just array\n  const tasksArray = Array.isArray(enhancedTasks) \n    ? enhancedTasks \n    : (enhancedTasks.tasks || []);\n  \n  if (!Array.isArray(tasksArray) || tasksArray.length === 0) {\n    throw new Error('AI did not return valid tasks array');\n  }\n  \n  // Return with metadata for next nodes\n  return {\n    tasks: tasksArray,\n    chatId: $('Parse & Validate JSON').item.json.chatId,\n    taskCount: tasksArray.length\n  };\n  \n} catch (error) {\n  // Fallback to original tasks if AI enhancement fails\n  console.error('AI enhancement failed, using original tasks:', error);\n  return {\n    tasks: $('Parse & Validate JSON').item.json.tasks,\n    chatId: $('Parse & Validate JSON').item.json.chatId,\n    taskCount: $('Parse & Validate JSON').item.json.taskCount\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        2528
+      ],
+      "id": "308a8415-7c75-4e5e-80f8-1d0a2fa0677b",
+      "name": "Extract Enhanced Tasks"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "tasks",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        960,
+        2528
+      ],
+      "id": "378efe4f-d949-4d93-9429-cfd3854deb19",
+      "name": "Split Tasks"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "family08932051421784163115@group.calendar.google.com",
+          "mode": "list"
+        },
+        "start": "={{ $json.datetime_iso }}",
+        "end": "={{ $json.datetime_iso }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "description": "={{ $json.description }}",
+          "summary": "={{ $json.title }}"
+        },
+        "remindersUi": {
+          "remindersValues": [
+            {
+              "method": "email",
+              "minutes": "={{ $json.reminder_offsets_minutes[0] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        2528
+      ],
+      "id": "8da959fd-b5e0-4591-8464-71695c40a209",
+      "name": "Create Calendar Event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "A7i9LSbn31QP4oK2",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Target ONLY the new records from the 'Prepare Reminder Records' node\nconst reminders = $(\"Prepare Reminder Records\").all();\nconst chatId = reminders[0].json.chatId;\nconst taskCount = reminders.length;\n\n// 2. Define icons for categories and priorities\nconst categoryEmoji = { 'homework': '📚', 'gym': '💪', 'personal': '👤', 'work': '💼' };\nconst priorityEmoji = { 'high': '🔴', 'medium': '🟡', 'low': '🟢' };\n\n// 3. Format each NEW record into a summary line\nconst summaries = reminders.map(item => {\n    const r = item.json;\n    const catIcon = categoryEmoji[r.category] || '📌';\n    const prioIcon = priorityEmoji[r.priority] || '🟡';\n    \n    return `🆔 *ID: ${r.reminderId}* | ${catIcon} *${r.taskTitle}* ${prioIcon}\\n   ⏰ ${r.eventTime}\\n   🔔 Reminder: ${r.reminderTime}`;\n});\n\n// 4. Build the final header and message\nconst header = taskCount === 1 \n    ? `✅ Created 1 new reminder:` \n    : `✅ Created ${taskCount} new reminders:`;\n\nconst finalMessage = `${header}\\n\\n${summaries.join('\\n\\n')}`;\n\nreturn {\n    chatId,\n    message: finalMessage\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        2528
+      ],
+      "id": "80c808f5-48f7-49a2-8125-d6ea6e8510c6",
+      "name": "Build Final Message"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Webhook').first().json.body.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2112,
+        2528
+      ],
+      "id": "98e4103d-aabd-4d63-b433-914578743e7c",
+      "name": "Send Success to Telegram",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "sebastian.08ld@gmail.com",
+        "subject": "❌ Telegram Reminder Bot - LLM Parsing Failed",
+        "message": "=The LLM failed to parse a Telegram message.\\n\\n**Error:**\\n{{ $json.error }}\\n\\n**Original Message:**\\n{{ $json.originalMessage }}\\n\\n**Raw Gemini Response:**\\n```\\n{{ $json.geminiRawResponse }}\\n```\\n\\n**Time:** {{ $now }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        2768
+      ],
+      "id": "cd23debf-cdab-4e86-b920-6def77985a84",
+      "name": "Send Error Email",
+      "webhookId": "77d31a1d-ca48-43c5-8416-2447bcd9ec72",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "M0aDvA8YtvyzvHLm",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "❌ Sorry, I couldn't understand that message. I've emailed the details to check what went wrong. Please try again!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        704,
+        2768
+      ],
+      "id": "2b9c6966-c509-41e0-aabd-7962fe62f2f3",
+      "name": "Send Error to Telegram",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse query request to extract filters\nconst messageText = $json.messageText.toLowerCase();\nconst chatId = $json.chatId;\n\n// Extract time filters\nlet timeFilter = 'all';\nif (/today/i.test(messageText)) {\n  timeFilter = 'today';\n} else if (/tomorrow/i.test(messageText)) {\n  timeFilter = 'tomorrow';\n} else if (/this week/i.test(messageText)) {\n  timeFilter = 'week';\n} else if (/upcoming/i.test(messageText)) {\n  timeFilter = 'upcoming';\n}\n\n// Extract category filter\nlet categoryFilter = null;\nconst categories = ['homework', 'applications', 'gym', 'personal', 'work'];\nfor (const cat of categories) {\n  if (messageText.includes(cat)) {\n    categoryFilter = cat;\n    break;\n  }\n}\n\n// Extract priority filter\nlet priorityFilter = null;\nif (/high priority|urgent/i.test(messageText)) {\n  priorityFilter = 'high';\n} else if (/low priority/i.test(messageText)) {\n  priorityFilter = 'low';\n} else if (/medium priority/i.test(messageText)) {\n  priorityFilter = 'medium';\n}\n\nreturn {\n  chatId,\n  timeFilter,\n  categoryFilter,\n  priorityFilter,\n  originalMessage: $json.messageText\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        3136
+      ],
+      "id": "4b13a8f7-1a29-4c2a-a1b3-d81d33ae8029",
+      "name": "Parse Query Request"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        3136
+      ],
+      "id": "6ae159a3-751f-4cc5-b632-472ff8869606",
+      "name": "Read All Reminders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter reminders based on query parameters\nconst filters = $('Parse Query Request').item.json;\nconst reminders = $input.all();\n\nconst now = new Date();\nconst todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());\nconst todayEnd = new Date(todayStart);\ntodayEnd.setDate(todayEnd.getDate() + 1);\n\nconst tomorrowStart = new Date(todayEnd);\nconst tomorrowEnd = new Date(tomorrowStart);\ntomorrowEnd.setDate(tomorrowEnd.getDate() + 1);\n\nconst weekEnd = new Date(todayStart);\nweekEnd.setDate(weekEnd.getDate() + 7);\n\nconst filtered = reminders.filter(item => {\n  const reminder = item.json;\n  const eventTime = new Date(reminder.eventTime);\n  \n  // Time filter\n  if (filters.timeFilter === 'today') {\n    if (eventTime < todayStart || eventTime >= todayEnd) return false;\n  } else if (filters.timeFilter === 'tomorrow') {\n    if (eventTime < tomorrowStart || eventTime >= tomorrowEnd) return false;\n  } else if (filters.timeFilter === 'week') {\n    if (eventTime < todayStart || eventTime >= weekEnd) return false;\n  } else if (filters.timeFilter === 'upcoming') {\n    if (eventTime < now) return false;\n  }\n  \n  // Category filter\n  if (filters.categoryFilter && reminder.category !== filters.categoryFilter) {\n    return false;\n  }\n  \n  // Priority filter\n  if (filters.priorityFilter && reminder.priority !== filters.priorityFilter) {\n    return false;\n  }\n  \n  return true;\n});\n\nreturn filtered.length > 0 ? filtered : [{ json: { noResults: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        3136
+      ],
+      "id": "d04f4f13-048e-4b3f-8a15-3785b57b6aa5",
+      "name": "Filter Reminders by Query"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format query results for display\nconst items = $input.all();\nconst filters = $('Parse Query Request').item.json;\n\nif (items.length === 1 && items[0].json.noResults) {\n  return {\n    chatId: filters.chatId,\n    message: `No reminders found matching your query.`\n  };\n}\n\n// Group by event\nconst grouped = {};\nitems.forEach(item => {\n  const r = item.json;\n  const key = r.calendarEventId;\n  if (!grouped[key]) {\n    grouped[key] = {\n      title: r.taskTitle,\n      description: r.taskDescription,\n      category: r.category,\n      priority: r.priority,\n      eventTime: r.eventTime,\n      reminders: []\n    };\n  }\n  grouped[key].reminders.push(r.offsetMinutes);\n});\n\n// Format each task\nconst categoryEmoji = {\n  'homework': '📚',\n  'applications': '📝',\n  'gym': '💪',\n  'personal': '👤',\n  'work': '💼'\n};\n\nconst priorityEmoji = {\n  'high': '🔴',\n  'medium': '🟡',\n  'low': '🟢'\n};\n\nconst formatted = Object.values(grouped).map(task => {\n  const eventDate = new Date(task.eventTime);\n  const formattedDate = eventDate.toLocaleString('en-US', {\n    timeZone: 'America/New_York',\n    weekday: 'short',\n    month: 'short',\n    day: 'numeric',\n    hour: 'numeric',\n    minute: '2-digit',\n    hour12: true\n  });\n  \n  const catIcon = categoryEmoji[task.category] || '📌';\n  const priIcon = priorityEmoji[task.priority] || '🟡';\n  \n  const reminderCount = task.reminders.length;\n  const reminderText = reminderCount === 1 ? 'reminder' : 'reminders';\n  \n  return `${catIcon} *${task.title}* ${priIcon}\\n   ⏰ ${formattedDate}\\n   🔔 ${reminderCount} ${reminderText}`;\n});\n\nconst count = formatted.length;\nconst header = count === 1 ? `Found 1 reminder:` : `Found ${count} reminders:`;\n\nreturn {\n  chatId: filters.chatId,\n  message: `${header}\\n\\n${formatted.join('\\n\\n')}`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        3136
+      ],
+      "id": "3f82c42d-0bb6-4163-8799-4deed08b7a0d",
+      "name": "Format Query Response"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        3136
+      ],
+      "id": "882729e3-45a6-40c4-8d99-5c458062959e",
+      "name": "Send Query Response",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse edit request - extract reminder ID and new details\nconst messageText = $json.messageText;\nconst chatId = $json.chatId;\n\n// Update line 6 to catch any digit instead of just long timestamps\nconst idMatch = messageText.match(/\\bid\\s*(\\d+)\\b/i) || messageText.match(/\\b(\\d+)\\b/);\nconst reminderId = idMatch ? idMatch[1] : null;\n\nif (!reminderId) {\n  return {\n    chatId,\n    error: 'Could not find reminder ID. Please specify which reminder to edit.',\n    requiresId: true\n  };\n}\n\n// Detect what to edit\nlet editType = null;\nlet newValue = null;\n\nif (/change.*time|reschedule|move.*to/i.test(messageText)) {\n  editType = 'time';\n  // Extract new time from message (simplified - in production use Gemini)\n  newValue = messageText; // Will be parsed by Gemini\n} else if (/change.*title|rename/i.test(messageText)) {\n  editType = 'title';\n  newValue = messageText;\n} else if (/change.*category/i.test(messageText)) {\n  editType = 'category';\n  // Extract category\n  const categories = ['homework', 'applications', 'gym', 'personal', 'work'];\n  for (const cat of categories) {\n    if (messageText.toLowerCase().includes(cat)) {\n      newValue = cat;\n      break;\n    }\n  }\n} else if (/change.*priority/i.test(messageText)) {\n  editType = 'priority';\n  if (/high/i.test(messageText)) newValue = 'high';\n  else if (/low/i.test(messageText)) newValue = 'low';\n  else newValue = 'medium';\n}\n\nreturn {\n  chatId,\n  reminderId,\n  editType,\n  newValue,\n  originalMessage: messageText\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        3824
+      ],
+      "id": "16ee4a52-f80a-43e8-9880-76e2a285b754",
+      "name": "Parse Edit Request"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        3824
+      ],
+      "id": "f1bc955e-de6a-421f-9fca-26abcfff7870",
+      "name": "Find Reminder to Edit",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find the specific reminder by ID\nconst reminderId = $('Parse Edit Request').item.json.reminderId;\nconst allReminders = $input.all();\n\nconst found = allReminders.filter(item => String(item.json.reminderId) === String(reminderId));\n\nif (found.length === 0) {\n  return {\n    chatId: $('Parse Edit Request').item.json.chatId,\n    error: `Reminder ${reminderId} not found.`,\n    notFound: true\n  };\n}\n\nreturn found;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        3824
+      ],
+      "id": "11f9e70e-a172-4749-8506-97d6bed0cbfe",
+      "name": "Filter by ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "edit-error-check",
+              "leftValue": "={{ $json.notFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        384,
+        3824
+      ],
+      "id": "2dd8c0d7-d0f1-4d67-b8f3-80161a2ff0b3",
+      "name": "Check Edit Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apply edits based on editType\nconst editRequest = $('Parse Edit Request').item.json;\nconst reminder = $json;\n\n// Apply the edit based on type\nif (editRequest.editType === 'title') {\n  reminder.taskTitle = editRequest.newValue;\n} else if (editRequest.editType === 'category') {\n  reminder.category = editRequest.newValue;\n} else if (editRequest.editType === 'priority') {\n  reminder.priority = editRequest.newValue;\n} else if (editRequest.editType === 'time') {\n  // For time edits, would need to re-parse with Gemini\n  // Simplified: just update description\n  reminder.taskDescription = `Updated: ${editRequest.newValue}`;\n}\n\nreturn reminder;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        3696
+      ],
+      "id": "269f6e19-d682-4288-a723-04ffb57afb88",
+      "name": "Apply Edits"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "reminderId"
+          ],
+          "schema": [
+            {
+              "id": "reminderId",
+              "displayName": "reminderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "taskTitle",
+              "displayName": "taskTitle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "taskDescription",
+              "displayName": "taskDescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "eventTime",
+              "displayName": "eventTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminderTime",
+              "displayName": "reminderTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "offsetMinutes",
+              "displayName": "offsetMinutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "chatId",
+              "displayName": "chatId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "calendarEventId",
+              "displayName": "calendarEventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent",
+              "displayName": "sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "createdAt",
+              "displayName": "createdAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        800,
+        3696
+      ],
+      "id": "360b5143-2ea6-451d-b649-ef6d3a76196f",
+      "name": "Update Reminder in Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        3952
+      ],
+      "id": "31448db3-1186-4436-a1ec-81f190c0fa64",
+      "name": "Send Edit Error",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Edit Request').item.json.chatId }}",
+        "text": "=✅ Reminder updated successfully!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        992,
+        3696
+      ],
+      "id": "3403f60e-54bc-48aa-858b-5199f0040855",
+      "name": "Send Edit Confirmation",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse delete request - extract reminder ID or filters\nconst messageText = $json.messageText;\nconst chatId = $json.chatId;\n\n// Update line 6 to catch any digit instead of just long timestamps\nconst idMatch = messageText.match(/\\bid\\s*(\\d+)\\b/i) || messageText.match(/\\b(\\d+)\\b/);\nconst reminderId = idMatch ? idMatch[1] : null;\n\n// Check for \"all\" deletion\nconst deleteAll = /delete all|clear all|remove all/i.test(messageText);\n\n// Check for category-specific deletion\nlet categoryFilter = null;\nconst categories = ['homework', 'applications', 'gym', 'personal', 'work'];\nfor (const cat of categories) {\n  if (messageText.toLowerCase().includes(cat)) {\n    categoryFilter = cat;\n    break;\n  }\n}\n\nreturn {\n  chatId,\n  reminderId,\n  deleteAll,\n  categoryFilter,\n  originalMessage: messageText\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        4528
+      ],
+      "id": "3e68e897-ecc1-4814-bc25-2c4b66af24de",
+      "name": "Parse Delete Request"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        4528
+      ],
+      "id": "87e39dee-d840-4319-80ae-8b66cdb08fa4",
+      "name": "Read Reminders for Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter reminders to delete\nconst params = $('Parse Delete Request').item.json;\nconst allReminders = $input.all();\n\nlet toDelete = [];\n\nif (params.reminderId) {\n  // Delete specific ID\n  toDelete = allReminders.filter(item => String(item.json.reminderId) === String(params.reminderId));\n} else if (params.deleteAll) {\n  // Delete all\n  toDelete = allReminders;\n} else if (params.categoryFilter) {\n  // Delete by category\n  toDelete = allReminders.filter(item => item.json.category === params.categoryFilter);\n}\n\nif (toDelete.length === 0) {\n  return {\n    chatId: params.chatId,\n    error: 'No reminders found to delete.',\n    notFound: true\n  };\n}\n\nreturn toDelete;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        4528
+      ],
+      "id": "d012b2bc-2d67-4b4c-b730-b4971ce3f6fd",
+      "name": "Filter Reminders to Delete"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "delete-error-check",
+              "leftValue": "={{ $json.notFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        384,
+        4528
+      ],
+      "id": "1a64f4bf-7931-4bce-aea5-5ef1d23a2f6d",
+      "name": "Check Delete Error"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        4656
+      ],
+      "id": "016b5048-d45a-4e80-b4ad-f65cbb14568c",
+      "name": "Send Delete Error",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "startIndex": "={{ $json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        592,
+        4400
+      ],
+      "id": "d9ffe947-8e16-4ec4-b854-acb333864ed3",
+      "name": "Delete from Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Count deleted items\nconst deleted = $input.all();\nconst count = deleted.length;\n\nreturn {\n  chatId: $('Parse Delete Request').item.json.chatId,\n  message: `✅ Deleted ${count} reminder${count === 1 ? '' : 's'}.`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        4400
+      ],
+      "id": "58c510bd-8b7a-47f0-af69-c8b36f5ddb33",
+      "name": "Format Delete Confirmation"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        4400
+      ],
+      "id": "930d58f5-9a5a-40fa-83a0-c493a77d133b",
+      "name": "Send Delete Confirmation",
+      "webhookId": "fdf48ba1-4f00-49b5-9e8c-e551785aa23c",
+      "credentials": {
+        "telegramApi": {
+          "id": "7K43476bGBxaMx63",
+          "name": "Reminder Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const allTasks = $('Split Tasks').all();\nconst chatId = $('Extract Enhanced Tasks').item.json.chatId;\nconst allCalendarEvents = $('Create Calendar Event').all();\nconst sheetData = $('Get Last ID From Sheet').all(); \nconst allReminders = [];\n\n// ID Logic: Finds the highest ID in your sheet, or starts at 0 if empty\nlet currentId = 0;\nif (sheetData.length > 0) {\n    const ids = sheetData.map(row => parseInt(row.json.reminderId)).filter(id => !isNaN(id));\n    currentId = ids.length > 0 ? Math.max(...ids) : 0;\n}\n\n// Helper function for Military Time (MM/DD/YYYY HH:MM) forced to New York Time\nconst formatMilitaryTime = (date) => {\n    return new Date(date).toLocaleString('en-US', {\n        timeZone: 'America/New_York', \n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit',\n        hour12: false\n    }).replace(',', '');\n};\n\nallCalendarEvents.forEach((calEvent, index) => {\n    const task = allTasks[index];\n    if (!task || !task.json.reminder_offsets_minutes) return;\n\n    task.json.reminder_offsets_minutes.forEach(offsetMinutes => {\n        const eventTime = new Date(task.json.datetime_iso);\n        const reminderTime = new Date(eventTime.getTime() - (offsetMinutes * 60 * 1000));\n        \n        currentId++; \n\n        allReminders.push({\n            json: {\n                reminderId: currentId,\n                taskTitle: task.json.title,\n                taskDescription: task.json.description,\n                category: task.json.category || 'personal',\n                priority: task.json.priority || 'medium',\n                eventTime: formatMilitaryTime(task.json.datetime_iso),\n                reminderTime: formatMilitaryTime(reminderTime),\n                offsetMinutes: offsetMinutes,\n                chatId: chatId,\n                calendarEventId: calEvent.json.id,\n                sent: false,\n                createdAt: formatMilitaryTime(new Date())\n            }\n        });\n    });\n});\n\nreturn allReminders;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        2528
+      ],
+      "id": "16f1d456-5b43-42d2-8959-09850286a0fb",
+      "name": "Prepare Reminder Records"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "reminderId",
+              "displayName": "reminderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "taskTitle",
+              "displayName": "taskTitle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "taskDescription",
+              "displayName": "taskDescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "eventTime",
+              "displayName": "eventTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminderTime",
+              "displayName": "reminderTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "offsetMinutes",
+              "displayName": "offsetMinutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chatId",
+              "displayName": "chatId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendarEventId",
+              "displayName": "calendarEventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent",
+              "displayName": "sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "createdAt",
+              "displayName": "createdAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1696,
+        2528
+      ],
+      "id": "a0af257d-17b4-41bd-aa7a-cc32162bddc6",
+      "name": "Store Reminders in Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk",
+          "mode": "list",
+          "cachedResultName": "Telegram reminder bot ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-QHE1FN7SClNlaSkl09Xu2rNKVplf_HVG5DhDoyFTsk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1312,
+        2528
+      ],
+      "id": "0f50baef-ac0d-47ba-a114-51fb0a1012df",
+      "name": "Get Last ID From Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LA2dQOuqM9kgWETb",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get file info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Text Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get file info": {
+      "main": [
+        [
+          {
+            "node": "Download Voice File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice File": {
+      "main": [
+        [
+          {
+            "node": "Transcribe with Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe with Whisper": {
+      "main": [
+        [
+          {
+            "node": "Prepare Transcribed Tex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Transcribed Tex": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Text Message": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Query Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Edit Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Delete Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini API": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate JSON": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "AI Task Enhancer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Task Enhancer": {
+      "main": [
+        [
+          {
+            "node": "Extract Enhanced Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Enhanced Tasks": {
+      "main": [
+        [
+          {
+            "node": "Split Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tasks": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Get Last ID From Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Final Message": {
+      "main": [
+        [
+          {
+            "node": "Send Success to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Error Email": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Query Request": {
+      "main": [
+        [
+          {
+            "node": "Read All Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Reminders": {
+      "main": [
+        [
+          {
+            "node": "Filter Reminders by Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Reminders by Query": {
+      "main": [
+        [
+          {
+            "node": "Format Query Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Query Response": {
+      "main": [
+        [
+          {
+            "node": "Send Query Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Edit Request": {
+      "main": [
+        [
+          {
+            "node": "Find Reminder to Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Reminder to Edit": {
+      "main": [
+        [
+          {
+            "node": "Filter by ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by ID": {
+      "main": [
+        [
+          {
+            "node": "Check Edit Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Edit Error": {
+      "main": [
+        [
+          {
+            "node": "Send Edit Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apply Edits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Edits": {
+      "main": [
+        [
+          {
+            "node": "Update Reminder in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Reminder in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Edit Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Delete Request": {
+      "main": [
+        [
+          {
+            "node": "Read Reminders for Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Reminders for Delete": {
+      "main": [
+        [
+          {
+            "node": "Filter Reminders to Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Reminders to Delete": {
+      "main": [
+        [
+          {
+            "node": "Check Delete Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Delete Error": {
+      "main": [
+        [
+          {
+            "node": "Send Delete Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete from Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete from Sheet": {
+      "main": [
+        [
+          {
+            "node": "Format Delete Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delete Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send Delete Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reminder Records": {
+      "main": [
+        [
+          {
+            "node": "Store Reminders in Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Reminders in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Build Final Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last ID From Sheet": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reminder Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "2c590210-4617-4801-8243-5f5393fdebff",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4caad13a6a57f185d556683cb8a7b8ef03aea0af46fb43e9ead47193f8d45e9e"
+  },
+  "id": "KnC9DSqmBYvoUhUs",
+  "tags": []
+}
