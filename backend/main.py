@@ -336,40 +336,40 @@ async def parse_reminder(request: Request, x_user_id: str = Header(...)):
     now_str = now.strftime(TZ_FORMAT)
     day_name = now.strftime("%A")
 
-    prompt = f"""You are a reminder parsing assistant. Parse the user's natural language into a structured reminder.
+    prompt = f"""You are a reminder parsing assistant for a college student. Parse natural speech into a structured reminder.
 
-Current date/time: {now_str}
-Day of week: {day_name}
+RIGHT NOW it is: {day_name}, {now_str}
 
-Available categories: homework, applications, gym, personal, work
-Available priorities: high, medium, low
+IMPORTANT: "today" means {now.strftime("%m/%d/%Y")}. "tomorrow" means {(now + timedelta(days=1)).strftime("%m/%d/%Y")}.
 
-Return a JSON object with these fields:
-- title: string (concise reminder title; strip filler like "remind me to", "don't forget to")
-- description: string (any extra context, or empty string)
-- category: string (best match from available categories)
-- priority: "low" | "medium" | "high" (infer from urgency cues: "important"/"urgent"/"ASAP" = high, "whenever"/"no rush" = low, otherwise medium)
-- event_time: string (in MM/dd/yyyy HH:mm format, resolved relative to current date/time)
-- reminder_offsets: array of integers (minutes before event_time to send alert notifications)
+Return JSON with these fields:
+- title: short, clean title (remove "remind me to", "don't forget to", times, dates — just the TASK)
+- description: extra context or empty string
+- category: one of [homework, applications, gym, personal, work]. Match keywords: "gym"/"workout"/"exercise"=gym, "homework"/"assignment"/"class"/"exam"/"study"=homework, "job"/"meeting"/"work"=work, "apply"/"application"=applications. Default: personal
+- priority: "high" if "important"/"urgent"/"ASAP", "low" if "whenever"/"no rush", else "medium"
+- event_time: the MAIN event time in MM/dd/yyyy HH:mm format
+- reminder_offsets: array of integers (minutes before event_time to alert the user)
 
-Rules for event_time:
-- "tomorrow" = next calendar day
-- "next Monday" = the upcoming Monday
-- "by Friday" = this Friday (or next Friday if today is after Friday)
-- If no time specified, default to 09:00
-- If no date specified, default to tomorrow
+CRITICAL RULES:
+1. "today" = {now.strftime("%m/%d/%Y")}. NOT tomorrow. If user says "today at 7pm", event_time = "{now.strftime("%m/%d/%Y")} 19:00"
+2. "tonight" = today evening. "this evening" = today evening.
+3. If user says "remind me at 6pm and 6:30pm", those are ALERT TIMES, not event times. Convert to offsets from the event_time.
+4. If no date given, assume TODAY if a future time today is possible, otherwise tomorrow.
+5. If no time given, default to 09:00.
 
-Rules for reminder_offsets:
-- If the user specifies when to be reminded ("remind me the night before and an hour before"), honor that exactly
-- "night before" = 720 minutes (12 hours before)
-- Otherwise, use smart defaults:
-  - Event more than 1 day away: [1440, 60, 15] (1 day, 1 hour, 15 min before)
-  - Event same day but >2 hours away: [120, 30, 10] (2 hours, 30 min, 10 min before)
-  - Event <2 hours away: [30, 10] (30 min, 10 min before)
-- For high priority, add an extra close-to-event alert
-- Never include an offset that would result in a time before {now_str}
+EXAMPLES:
 
-Return ONLY valid JSON, no markdown fences."""
+User: "remind me to go to the gym today at 7pm, remind me at 6pm and 6:30pm"
+Result: {{"title": "Go to the gym", "description": "", "category": "gym", "priority": "medium", "event_time": "{now.strftime("%m/%d/%Y")} 19:00", "reminder_offsets": [60, 30]}}
+(6pm = 60 min before 7pm, 6:30pm = 30 min before 7pm)
+
+User: "submit math homework by friday 3pm, really important"
+Result: {{"title": "Submit math homework", "description": "", "category": "homework", "priority": "high", "event_time": "03/20/2026 15:00", "reminder_offsets": [1440, 60, 15, 5]}}
+
+User: "call mom tomorrow"
+Result: {{"title": "Call mom", "description": "", "category": "personal", "priority": "medium", "event_time": "{(now + timedelta(days=1)).strftime("%m/%d/%Y")} 09:00", "reminder_offsets": [60, 15]}}
+
+Return ONLY valid JSON."""
 
     try:
         resp = None
@@ -383,7 +383,7 @@ Return ONLY valid JSON, no markdown fences."""
                                 {"role": "user", "parts": [{"text": prompt + "\n\nUser said: " + text}]}
                             ],
                             "generationConfig": {
-                                "temperature": 0.1,
+                                "temperature": 0.3,
                                 "responseMimeType": "application/json",
                             },
                         },
