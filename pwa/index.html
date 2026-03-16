@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#F9F6F1" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#171412" media="(prefers-color-scheme: dark)">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -562,12 +563,12 @@
       S.parsing = true; render();
       try {
         var res = await api('/parse', { method: 'POST', body: JSON.stringify({ text: text }) });
-        if (res.success && res.parsed) {
+        if (res.parsed) {
           S.parsedReminder = res.parsed;
           S.createMode = 'preview';
-          if (res.error) showToast(res.error, 'error');
+          if (res.fallback) showToast('AI unavailable — using defaults, adjust as needed', 'error');
         } else {
-          showToast(res.error || 'AI parsing failed', 'error');
+          showToast(res.error || 'Failed to parse reminder', 'error');
         }
       } catch { showToast('Cannot reach server', 'error'); }
       S.parsing = false; render();
@@ -1649,7 +1650,10 @@
     bindEvents();
     render();
     loadReminders();
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function() {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(function() {});
+      navigator.serviceWorker.getRegistration().then(function(r) { if (r) r.update(); });
+    }
     if ('Notification' in window && Notification.permission === 'default') { Notification.requestPermission(); }
     setInterval(checkAlerts, 60000);
     checkAlerts();

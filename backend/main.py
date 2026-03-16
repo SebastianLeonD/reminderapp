@@ -9,7 +9,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -467,7 +467,8 @@ Return ONLY valid JSON, no markdown fences."""
         # Fallback: use raw text as title, defaults for everything else
         tomorrow = (now + timedelta(days=1)).replace(hour=9, minute=0).strftime(TZ_FORMAT)
         return {
-            "success": True,
+            "success": False,
+            "fallback": True,
             "parsed": {
                 "title": text,
                 "description": "",
@@ -480,7 +481,7 @@ Return ONLY valid JSON, no markdown fences."""
                     {"offsetMinutes": 15, "label": "15 min before"},
                 ],
             },
-            "error": f"AI parsing failed, using defaults: {str(e)}",
+            "error": str(e),
         }
 
 
@@ -495,10 +496,21 @@ def mark_alert_sent(alert_id: str, x_user_id: str = Header(...)):
     return {"success": True, "message": "Alert marked sent", "error": None}
 
 
-# Serve PWA static files (must be last — catch-all)
+# Serve index.html with no-cache headers so SW updates propagate
 pwa_dir = Path(__file__).parent.parent / "pwa"
+
+
+@app.get("/")
+async def serve_index():
+    index_path = pwa_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return JSONResponse({"error": "Not found"}, status_code=404)
+
+
+# Other PWA static files (sw.js, manifest.json, etc.)
 if pwa_dir.exists():
-    app.mount("/", StaticFiles(directory=str(pwa_dir), html=True), name="static")
+    app.mount("/", StaticFiles(directory=str(pwa_dir), html=False), name="static")
 
 
 if __name__ == "__main__":
