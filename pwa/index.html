@@ -1322,6 +1322,7 @@
 
     function closeDetail() {
       S.detailId = null;
+      S._editAlerts = null;
       render();
     }
 
@@ -1342,12 +1343,19 @@
       var dt = timeEl ? timeEl.value : '';
       var eventTime = dt ? fmtApi(new Date(dt)) : r.eventTime;
 
+      // Include edited alert times
+      var reminderTimes = null;
+      if (S._editAlerts && S._editAlerts._rid === r.id) {
+        reminderTimes = S._editAlerts.map(function(ea) { return { offsetMinutes: ea.offsetMinutes, reminderTime: ea.time }; });
+      }
+
+      var body = { title: title, description: desc, category: cat, priority: pri, eventTime: eventTime };
+      if (reminderTimes !== null) body.reminderTimes = reminderTimes;
+
       try {
-        var d = await api('/' + r.id, {
-          method: 'PUT',
-          body: JSON.stringify({ title: title, description: desc, category: cat, priority: pri, eventTime: eventTime }),
-        });
+        var d = await api('/' + r.id, { method: 'PUT', body: JSON.stringify(body) });
         if (d.success) {
+          S._editAlerts = null;
           showToast('Reminder updated', 'success');
           await loadReminders();
           render();
@@ -1439,32 +1447,81 @@
       timeField.appendChild(timeInput);
       inner.appendChild(timeField);
 
-      // Reminder alerts
-      if (r.reminderTimes && r.reminderTimes.length) {
+      // Reminder alerts (editable)
+      if (!r.sent) {
         var alertField = el('div', { className: 'detail-field' });
         alertField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Reminder Alerts' }));
 
-        r.reminderTimes.forEach(function(rt) {
-          var alertTime = parseD(rt.reminderTime);
-          var mins = rt.offsetMinutes;
-          var lbl = mins >= 1440 ? Math.floor(mins/1440) + ' day' + (Math.floor(mins/1440) > 1 ? 's' : '') + ' before'
-                  : mins >= 60 ? Math.floor(mins/60) + ' hour' + (Math.floor(mins/60) > 1 ? 's' : '') + ' before'
-                  : mins + ' min before';
+        // Store editable alerts in a temp array on S
+        if (!S._editAlerts || S._editAlerts._rid !== r.id) {
+          S._editAlerts = (r.reminderTimes || []).map(function(rt) {
+            return { time: rt.reminderTime, offsetMinutes: rt.offsetMinutes, id: rt.id };
+          });
+          S._editAlerts._rid = r.id;
+        }
 
+        S._editAlerts.forEach(function(ea, i) {
+          var alertTime = parseD(ea.time);
           var row = el('div', { className: 'detail-alert-row' });
-          var info = el('div');
-          info.appendChild(el('div', { className: 'detail-alert-label', textContent: lbl }));
-          info.appendChild(el('div', { className: 'detail-alert-time', textContent: dispTime(alertTime) }));
-          row.appendChild(info);
+
+          var timeInput = el('input', {
+            className: 'detail-time-input',
+            type: 'datetime-local',
+            value: toDTL(alertTime),
+            style: { flex: '1' },
+          });
+          timeInput.addEventListener('change', function() {
+            var newDate = new Date(this.value);
+            S._editAlerts[i].time = fmtApi(newDate);
+            // Recalculate offset from event time
+            var evtEl = document.getElementById('d-time');
+            if (evtEl) {
+              var evtDate = new Date(evtEl.value);
+              S._editAlerts[i].offsetMinutes = Math.round((evtDate - newDate) / 60000);
+            }
+          });
+          row.appendChild(timeInput);
+
+          var removeBtn = el('button', { className: 'detail-alert-remove', textContent: '\u00d7' });
+          removeBtn.addEventListener('click', function() {
+            S._editAlerts.splice(i, 1);
+            render();
+          });
+          row.appendChild(removeBtn);
+
           alertField.appendChild(row);
         });
 
+        // Add alert button
+        var addBtn = el('button', { className: 'detail-add-alert' });
+        var plusSvg = svgIcon([
+          { tag: 'line', x1: '12', y1: '5', x2: '12', y2: '19' },
+          { tag: 'line', x1: '5', y1: '12', x2: '19', y2: '12' },
+        ]);
+        addBtn.appendChild(plusSvg);
+        addBtn.appendChild(document.createTextNode('Add reminder alert'));
+        addBtn.addEventListener('click', function() {
+          // Default: 1 hour before event time
+          var evtEl = document.getElementById('d-time');
+          var evtDate = evtEl ? new Date(evtEl.value) : d;
+          var alertDate = new Date(evtDate.getTime() - 60 * 60000);
+          S._editAlerts.push({ time: fmtApi(alertDate), offsetMinutes: 60, id: null });
+          render();
+        });
+        alertField.appendChild(addBtn);
+
         inner.appendChild(alertField);
-      } else if (!r.sent) {
-        var noAlerts = el('div', { className: 'detail-field' });
-        noAlerts.appendChild(el('div', { className: 'detail-field-label', textContent: 'Reminder Alerts' }));
-        noAlerts.appendChild(el('div', { className: 'hint', style: { padding: '0' }, textContent: 'No reminder alerts set for this item.' }));
-        inner.appendChild(noAlerts);
+      } else if (r.reminderTimes && r.reminderTimes.length) {
+        // Completed — show read-only
+        var alertField2 = el('div', { className: 'detail-field' });
+        alertField2.appendChild(el('div', { className: 'detail-field-label', textContent: 'Reminder Alerts' }));
+        r.reminderTimes.forEach(function(rt) {
+          var alertTime = parseD(rt.reminderTime);
+          var row = el('div', { className: 'detail-alert-row' });
+          row.appendChild(el('div', { className: 'detail-alert-time', textContent: dispTime(alertTime) }));
+          alertField2.appendChild(row);
+        });
+        inner.appendChild(alertField2);
       }
 
       card.appendChild(inner);

@@ -262,12 +262,38 @@ async def update_reminder(reminder_id: str, request: Request, x_user_id: str = H
         fields.append("sent = ?")
         params.append(1 if body["sent"] else 0)
 
-    if not fields:
-        return {"success": True, "message": "Nothing to update", "error": None}
+    reminder_times = body.get("reminderTimes", None)
 
-    params.extend([reminder_id, x_user_id])
     conn = get_db()
-    conn.execute(f"UPDATE reminders SET {', '.join(fields)} WHERE id = ? AND user_id = ?", params)
+
+    if fields:
+        params.extend([reminder_id, x_user_id])
+        conn.execute(f"UPDATE reminders SET {', '.join(fields)} WHERE id = ? AND user_id = ?", params)
+
+    # Replace reminder times if provided
+    if reminder_times is not None:
+        conn.execute("DELETE FROM reminder_times WHERE reminder_id = ?", (reminder_id,))
+        event_time = body.get("eventTime")
+        if not event_time:
+            row = conn.execute("SELECT event_time FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+            event_time = row["event_time"] if row else None
+        if event_time:
+            for rt in reminder_times:
+                # Use provided reminderTime or compute from offset
+                if "reminderTime" in rt and rt["reminderTime"]:
+                    alert_time_str = rt["reminderTime"]
+                else:
+                    try:
+                        event_dt = datetime.strptime(event_time, TZ_FORMAT)
+                        alert_dt = event_dt - timedelta(minutes=rt.get("offsetMinutes", 60))
+                        alert_time_str = alert_dt.strftime(TZ_FORMAT)
+                    except ValueError:
+                        continue
+                conn.execute(
+                    "INSERT INTO reminder_times (id, reminder_id, reminder_time, offset_minutes, sent) VALUES (?, ?, ?, ?, 0)",
+                    (str(uuid.uuid4()), reminder_id, alert_time_str, rt.get("offsetMinutes", 0)),
+                )
+
     conn.commit()
     conn.close()
 
