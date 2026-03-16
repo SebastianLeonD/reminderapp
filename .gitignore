@@ -1,2 +1,40 @@
 # Auto Claude data directory
 .auto-claude/
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# API keys
+backend/.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Database
+*.db
+
+# Logs
+*.log
+
+# Claude worktrees
+.claude/worktrees/
+
+# Node
+node_modules/

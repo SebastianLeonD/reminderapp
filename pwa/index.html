@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Reminders</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F9F6F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171412" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #F9F6F1; --bg2: #F0EBE3;
+      --surface: #FFFFFF; --surface-hover: #F5F2ED;
+      --text: #2C2520; --text2: #8A8279; --text3: #B5AEA5;
+      --border: #E8E2DA;
+      --accent: #D4613A; --accent-hover: #C05530;
+      --accent-light: rgba(212,97,58,0.08);
+      --danger: #C44040; --danger-light: rgba(196,64,64,0.08);
+      --cat-homework: #4A7FD4; --cat-applications: #8B5FC7;
+      --cat-gym: #D48A3A; --cat-personal: #4AAD6B; --cat-work: #7A7570;
+      --pri-high: #D44A4A; --pri-medium: #D4A83A; --pri-low: #4AAD6B;
+      --radius: 14px; --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(44,37,32,0.05), 0 4px 14px rgba(44,37,32,0.04);
+      --font-display: 'Instrument Serif', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --tabbar-h: 68px; --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    [data-theme="dark"] {
+      --bg: #171412; --bg2: #1E1A17;
+      --surface: #252119; --surface-hover: #2E2A22;
+      --text: #E8E2DA; --text2: #8A8279; --text3: #4A4540;
+      --border: #332E28;
+      --accent: #E8774E; --accent-hover: #D4613A;
+      --accent-light: rgba(232,119,78,0.1);
+      --danger-light: rgba(196,64,64,0.12);
+      --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 14px rgba(0,0,0,0.12);
+    }
+
+    html { height: 100%; -webkit-tap-highlight-color: transparent; }
+    body {
+      height: 100%; font-family: var(--font-body); font-size: 15px;
+      color: var(--text); background: var(--bg);
+      -webkit-font-smoothing: antialiased; overflow: hidden;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; opacity: 0.025;
+      pointer-events: none; z-index: 9999;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 128px;
+    }
+    #app { display: flex; flex-direction: column; height: 100%; max-width: 600px; margin: 0 auto; position: relative; }
+    #main {
+      flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+      padding: 0 16px; padding-top: env(safe-area-inset-top, 12px);
+      padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px);
+    }
+    #tabbar {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 600px; display: flex; align-items: center;
+      justify-content: space-around; height: calc(var(--tabbar-h) + var(--safe-b));
+      padding-bottom: var(--safe-b); background: var(--surface);
+      border-top: 1px solid var(--border); backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px); z-index: 100;
+    }
+    [data-theme="dark"] #tabbar { background: rgba(37,33,25,0.88); }
+    .tab {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 16px; border: none; background: none; color: var(--text3);
+      font-family: var(--font-body); font-size: 11px; font-weight: 500;
+      cursor: pointer; transition: color 0.2s; -webkit-tap-highlight-color: transparent;
+    }
+    .tab svg { width: 22px; height: 22px; }
+    .tab.active { color: var(--accent); }
+
+    .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); padding: 20px 0 8px; }
+    .section-label.overdue { color: var(--pri-high); }
+    .greeting { padding: 24px 0 4px; }
+    .greeting-sub { font-size: 14px; font-weight: 400; color: var(--text2); margin-bottom: 2px; }
+    .greeting-name { font-family: var(--font-display); font-size: 32px; line-height: 1.15; color: var(--text); }
+    .greeting-date { font-size: 13px; color: var(--text3); margin-top: 6px; }
+    .view-header { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; }
+    .topbar-title { font-family: var(--font-display); font-size: 26px; }
+    .icon-btn {
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      border: none; background: var(--bg2); color: var(--text2); border-radius: 50%;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .icon-btn:active { background: var(--border); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .card-list { display: flex; flex-direction: column; gap: 8px; }
+    .card {
+      display: flex; align-items: stretch; background: var(--surface);
+      border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+      animation: card-in 0.35s ease-out both; position: relative;
+    }
+    .card.completed { opacity: 0.5; }
+    .card-color { width: 4px; flex-shrink: 0; }
+    .card-body { flex: 1; padding: 12px 14px; min-width: 0; }
+    .card-top { display: flex; align-items: flex-start; gap: 8px; }
+    .card-priority { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .card-title { flex: 1; font-weight: 500; font-size: 15px; line-height: 1.35; word-wrap: break-word; }
+    .card.completed .card-title { text-decoration: line-through; color: var(--text2); }
+    .card-desc { font-size: 13px; color: var(--text2); margin-top: 3px; line-height: 1.3; }
+    .card-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 12px; color: var(--text2); }
+    .card-meta .overdue-time { color: var(--pri-high); font-weight: 500; }
+    .card-badge { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 20px; background: var(--bg2); color: var(--text2); }
+    .card-actions { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 8px; flex-shrink: 0; }
+    .card-action {
+      width: 30px; height: 30px; border: none; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .card-action svg { width: 15px; height: 15px; }
+    .card-action.complete-btn { background: rgba(74,173,107,0.1); color: var(--cat-personal); }
+    .card-action.complete-btn:active { background: rgba(74,173,107,0.25); }
+    .card-action.delete-btn { background: var(--danger-light); color: var(--danger); }
+    .card-action.delete-btn:active { background: rgba(196,64,64,0.2); }
+    .card.removing { animation: card-out 0.3s ease-in forwards; }
+    @keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes card-out { to { opacity: 0; transform: translateX(-60px); height: 0; margin: 0; padding: 0; overflow: hidden; } }
+
+    .empty { text-align: center; padding: 48px 24px; color: var(--text3); }
+    .empty-title { font-family: var(--font-display); font-size: 22px; font-style: italic; color: var(--text2); margin-bottom: 6px; }
+    .empty-sub { font-size: 13px; }
+
+    .filters { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 12px; scrollbar-width: none; }
+    .filters::-webkit-scrollbar { display: none; }
+    .chip {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text2); font-family: var(--font-body);
+      font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+    }
+    .chip.active { border-color: transparent; color: #fff; }
+    .filter-row { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; }
+    .filter-row select { font-family: var(--font-body); font-size: 13px; padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+    .filter-row label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text2); cursor: pointer; }
+    .filter-row input[type="checkbox"] { accent-color: var(--accent); }
+
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); margin-bottom: 8px; }
+    .form-input, .form-textarea {
+      width: 100%; padding: 12px 14px; font-family: var(--font-body); font-size: 15px;
+      color: var(--text); background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); outline: none; transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-textarea { resize: vertical; min-height: 70px; }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-option {
+      padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: var(--surface); color: var(--text2); font-family: var(--font-body);
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+    }
+    .chip-option.selected { border-color: transparent; color: #fff; }
+    .btn-primary {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 14px; border: none; border-radius: var(--radius);
+      background: var(--accent); color: #fff; font-family: var(--font-body);
+      font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary:active { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .settings-section { margin-bottom: 24px; }
+    .settings-heading { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); margin-bottom: 8px; }
+    .settings-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
+    .settings-row + .settings-row { border-top: 1px solid var(--border); }
+    .settings-row label { font-size: 15px; }
+    .settings-row input[type="text"] { text-align: right; border: none; background: transparent; font-family: var(--font-body); font-size: 15px; color: var(--text2); outline: none; width: 55%; }
+    .settings-row .value { font-size: 14px; color: var(--text2); }
+    .toggle { width: 46px; height: 26px; border-radius: 13px; background: var(--border); border: none; padding: 2px; cursor: pointer; transition: background 0.2s; }
+    .toggle::after { content: ''; width: 22px; height: 22px; border-radius: 50%; background: #fff; display: block; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+    .toggle.on { background: var(--accent); }
+    .toggle.on::after { transform: translateX(20px); }
+    .toast { position: fixed; top: calc(env(safe-area-inset-top, 12px) + 8px); left: 50%; transform: translateX(-50%) translateY(-100px); padding: 10px 20px; border-radius: 12px; font-size: 14px; font-weight: 500; font-family: var(--font-body); z-index: 200; transition: transform 0.3s ease; max-width: calc(100% - 32px); text-align: center; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #2E7D46; color: #fff; }
+    .toast.error { background: #C44040; color: #fff; }
+    .skeleton { background: linear-gradient(90deg, var(--bg2) 25%, var(--surface) 50%, var(--bg2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius); height: 64px; margin-bottom: 8px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .hint { font-size: 12px; color: var(--text3); margin-top: 6px; padding: 0 4px; }
+
+    /* ── Voice Recorder Card ── */
+    .recorder-card {
+      background: var(--surface);
+      border-radius: 24px;
+      box-shadow: 0 2px 8px rgba(44,37,32,0.04), 0 8px 32px rgba(44,37,32,0.06);
+      padding: 32px 24px 20px;
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    [data-theme="dark"] .recorder-card {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    /* Mic button with concentric glow rings */
+    .mic-wrap {
+      position: relative;
+      width: 140px; height: 140px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .mic-ring {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle, rgba(212,97,58,0.06) 0%, transparent 70%);
+      transition: all 0.4s ease;
+    }
+    .mic-ring-1 { width: 140px; height: 140px; }
+    .mic-ring-2 { width: 110px; height: 110px; background: radial-gradient(circle, rgba(212,97,58,0.08) 0%, transparent 70%); }
+    .mic-ring-3 { width: 84px; height: 84px; background: radial-gradient(circle, rgba(212,97,58,0.12) 0%, transparent 70%); }
+
+    .mic-wrap.recording .mic-ring-1 { animation: ring-breathe 2s ease-in-out infinite; }
+    .mic-wrap.recording .mic-ring-2 { animation: ring-breathe 2s ease-in-out infinite 0.15s; }
+    .mic-wrap.recording .mic-ring-3 { animation: ring-breathe 2s ease-in-out infinite 0.3s; }
+    .mic-wrap.recording .mic-ring { background: radial-gradient(circle, rgba(196,64,64,0.1) 0%, transparent 70%); }
+
+    @keyframes ring-breathe {
+      0%, 100% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.12); opacity: 1; }
+    }
+
+    .mic-btn {
+      position: relative; z-index: 2;
+      width: 68px; height: 68px; border-radius: 50%; border: none;
+      background: var(--bg2); color: var(--text2); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 12px rgba(44,37,32,0.08);
+    }
+    .mic-btn svg { width: 28px; height: 28px; }
+    .mic-btn:active { transform: scale(0.93); }
+    .mic-btn.recording {
+      background: var(--danger);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(196,64,64,0.3);
+    }
+
+    /* Timer */
+    .rec-timer {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.03em;
+      margin-bottom: 16px;
+      min-height: 24px;
+    }
+    .rec-timer.active { color: var(--danger); }
+
+    /* Waveform */
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      height: 40px;
+      width: 100%;
+      max-width: 280px;
+      margin-bottom: 20px;
+    }
+    .wave-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: height 0.1s ease, background 0.3s ease;
+      height: 6px;
+    }
+    .waveform.active .wave-bar { background: var(--accent); }
+    .waveform.active.rec .wave-bar { background: var(--danger); }
+
+    /* Transcription display */
+    .transcript-area {
+      width: 100%;
+      min-height: 48px;
+      max-height: 100px;
+      overflow-y: auto;
+      padding: 10px 14px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--text);
+      text-align: center;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      scrollbar-width: none;
+    }
+    .transcript-area::-webkit-scrollbar { display: none; }
+    .transcript-placeholder { color: var(--text3); font-style: italic; font-size: 14px; }
+
+    /* Bottom action bar */
+    .rec-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .rec-action-btn {
+      width: 44px; height: 44px; border-radius: 50%; border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .rec-action-btn svg { width: 20px; height: 20px; }
+    .rec-reset {
+      background: var(--bg2); color: var(--text3);
+    }
+    .rec-reset:active { background: var(--border); }
+    .rec-send {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 2px 10px rgba(212,97,58,0.25);
+    }
+    .rec-send:active { background: var(--accent-hover); }
+    .rec-send:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+    .rec-send.thinking {
+      animation: send-shimmer 1.2s ease-in-out infinite;
+    }
+    @keyframes send-shimmer {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .rec-status {
+      font-size: 13px; color: var(--text3); font-weight: 500;
+    }
+    .rec-status.thinking-text { color: var(--accent); }
+
+    /* Text mode toggle */
+    .text-toggle {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      margin-top: 14px; padding: 8px 16px; border: none; background: none;
+      color: var(--text3); font-family: var(--font-body); font-size: 13px;
+      cursor: pointer; transition: color 0.15s;
+    }
+    .text-toggle:hover { color: var(--text2); }
+    .text-toggle svg { width: 16px; height: 16px; }
+
+    /* Text input mode */
+    .text-input-area {
+      width: 100%; margin-top: 12px;
+    }
+    .voice-text {
+      width: 100%; min-height: 90px; padding: 12px 14px;
+      font-family: var(--font-body); font-size: 15px; color: var(--text);
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      resize: vertical; outline: none; transition: border-color 0.15s;
+    }
+    .voice-text:focus { border-color: var(--accent); }
+    .parse-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 14px; margin-top: 12px; border: none; border-radius: var(--radius);
+      background: var(--accent); color: #fff; font-family: var(--font-body);
+      font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .parse-btn:active { background: var(--accent-hover); }
+    .parse-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Preview card ── */
+    .preview-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-top: 12px; }
+    .preview-field { margin-bottom: 14px; }
+    .preview-field:last-child { margin-bottom: 0; }
+    .alert-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .alert-chip {
+      display: flex; align-items: center; gap: 4px; padding: 4px 10px;
+      border-radius: 16px; font-size: 12px; font-weight: 500;
+      background: var(--accent-light); color: var(--accent); border: none;
+    }
+    .alert-chip-x {
+      width: 14px; height: 14px; border: none; background: none;
+      color: var(--text3); cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 14px; padding: 0; line-height: 1;
+    }
+    .alert-chip-x:hover { color: var(--danger); }
+    .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+    .btn-secondary {
+      flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); color: var(--text2); font-family: var(--font-body);
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-secondary:active { background: var(--bg2); }
+    .btn-row .btn-primary { flex: 2; }
+
+    /* ── Alert indicator on cards ── */
+    .card-alerts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .card-alert-chip { font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--accent-light); color: var(--accent); }
+
+    /* ── Make cards tappable ── */
+    .card-body { cursor: pointer; }
+
+    /* ── Detail View ── */
+    .detail-back {
+      display: flex; align-items: center; gap: 6px; padding: 10px 0;
+      border: none; background: none; color: var(--accent);
+      font-family: var(--font-body); font-size: 14px; font-weight: 500;
+      cursor: pointer;
+    }
+    .detail-back svg { width: 18px; height: 18px; }
+    .detail-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .detail-card {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+      animation: card-in 0.25s ease-out;
+    }
+    .detail-color-bar { height: 4px; }
+    .detail-inner { padding: 18px 16px; }
+    .detail-field { margin-bottom: 18px; }
+    .detail-field:last-child { margin-bottom: 0; }
+    .detail-field-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text3); margin-bottom: 6px;
+    }
+    .detail-title-input {
+      width: 100%; border: none; background: transparent;
+      font-family: var(--font-body); font-size: 18px; font-weight: 600;
+      color: var(--text); outline: none; padding: 0;
+    }
+    .detail-desc-input {
+      width: 100%; border: none; background: transparent;
+      font-family: var(--font-body); font-size: 14px; color: var(--text2);
+      outline: none; padding: 0; resize: none; min-height: 20px;
+    }
+    .detail-time-display {
+      font-size: 15px; font-weight: 500; color: var(--text);
+    }
+    .detail-time-input {
+      width: 100%; padding: 8px 10px; font-family: var(--font-body); font-size: 14px;
+      color: var(--text); background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); outline: none;
+    }
+    .detail-time-input:focus { border-color: var(--accent); }
+    .detail-alert-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .detail-alert-row:last-child { border-bottom: none; }
+    .detail-alert-time { font-size: 13px; color: var(--text2); }
+    .detail-alert-label { font-size: 14px; font-weight: 500; color: var(--text); }
+    .detail-alert-remove {
+      width: 24px; height: 24px; border: none; border-radius: 50%;
+      background: var(--danger-light); color: var(--danger);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 14px;
+    }
+    .detail-add-alert {
+      display: flex; align-items: center; gap: 6px; padding: 8px 0;
+      border: none; background: none; color: var(--accent);
+      font-family: var(--font-body); font-size: 13px; font-weight: 500;
+      cursor: pointer;
+    }
+    .detail-add-alert svg { width: 16px; height: 16px; }
+    .detail-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .detail-actions .btn-primary { flex: 1; }
+    .detail-status {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; margin-bottom: 12px;
+      border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+    }
+    .detail-status.completed-status { background: rgba(74,173,107,0.1); color: var(--cat-personal); }
+    .detail-status.overdue-status { background: rgba(212,74,74,0.08); color: var(--pri-high); }
+
+    @media (min-width: 600px) { #main { padding-left: 24px; padding-right: 24px; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <main id="main"></main>
+    <nav id="tabbar">
+      <button class="tab active" data-tab="today">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span>Today</span>
+      </button>
+      <button class="tab" data-tab="all">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>
+        <span>All</span>
+      </button>
+      <button class="tab" data-tab="create">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>New</span>
+      </button>
+      <button class="tab" data-tab="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script>
+    // ── State ──
+    const S = {
+      tab: 'today', reminders: [], loading: false,
+      userId: localStorage.getItem('userId') || 'sebastian',
+      baseURL: localStorage.getItem('baseURL') || '',
+      dark: localStorage.getItem('dark') === '1',
+      filterCat: null, filterPri: null, showCompleted: false,
+      createMode: 'input', voiceText: '', recording: false, parsing: false, parsedReminder: null,
+      detailId: null,
+    };
+
+    // ── Voice Recognition ──
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var speechSupported = !!SpeechRecognition;
+    var recognition = null;
+
+    function startVoice() {
+      if (!speechSupported || S.recording) return;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      S.recording = true;
+      render();
+
+      recognition.onresult = function(e) {
+        var transcript = '';
+        for (var i = 0; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        S.voiceText = transcript;
+        var ta = document.getElementById('voice-textarea');
+        if (ta) ta.value = transcript;
+      };
+      recognition.onerror = function() { stopVoice(); };
+      recognition.onend = function() { S.recording = false; render(); };
+      recognition.start();
+    }
+
+    function stopVoice() {
+      if (recognition) { recognition.stop(); recognition = null; }
+      S.recording = false;
+      render();
+    }
+
+    async function parseWithAI() {
+      var text = S.voiceText.trim();
+      if (!text) { showToast('Say or type something first', 'error'); return; }
+      S.parsing = true; render();
+      try {
+        var res = await api('/parse', { method: 'POST', body: JSON.stringify({ text: text }) });
+        if (res.success && res.parsed) {
+          S.parsedReminder = res.parsed;
+          S.createMode = 'preview';
+          if (res.error) showToast(res.error, 'error');
+        } else {
+          showToast(res.error || 'AI parsing failed', 'error');
+        }
+      } catch { showToast('Cannot reach server', 'error'); }
+      S.parsing = false; render();
+    }
+
+    const CATS = [
+      { key: 'homework', label: 'Homework', color: 'var(--cat-homework)' },
+      { key: 'applications', label: 'Apps', color: 'var(--cat-applications)' },
+      { key: 'gym', label: 'Gym', color: 'var(--cat-gym)' },
+      { key: 'personal', label: 'Personal', color: 'var(--cat-personal)' },
+      { key: 'work', label: 'Work', color: 'var(--cat-work)' },
+    ];
+    const PRIS = [
+      { key: 'high', label: 'High', color: 'var(--pri-high)' },
+      { key: 'medium', label: 'Medium', color: 'var(--pri-medium)' },
+      { key: 'low', label: 'Low', color: 'var(--pri-low)' },
+    ];
+    function catColor(c) { return CATS.find(x => x.key === c)?.color || 'var(--text3)'; }
+    function catLabel(c) { return CATS.find(x => x.key === c)?.label || c; }
+    function priColor(p) { return PRIS.find(x => x.key === p)?.color || 'var(--text3)'; }
+
+    // ── Sanitized DOM rendering via DOMPurify ──
+    // All user-provided text is escaped via textContent. HTML templates use DOMPurify
+    // with RETURN_DOM_FRAGMENT to safely render markup without raw innerHTML.
+    function safeRender(el, html) {
+      const clean = DOMPurify.sanitize(html, {
+        RETURN_DOM_FRAGMENT: true,
+        ADD_TAGS: ['form'],
+        ADD_ATTR: ['data-id', 'data-tab', 'data-val'],
+      });
+      el.replaceChildren(clean);
+      // Re-bind event listeners after sanitization strips inline handlers
+      bindEvents();
+    }
+
+    // ── API ──
+    function apiBase() {
+      const b = S.baseURL || location.origin;
+      return b.replace(/\/+$/, '') + '/webhook/api/reminders';
+    }
+    async function api(path, opts = {}) {
+      const res = await fetch(apiBase() + path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'x-user-id': S.userId, ...(opts.headers || {}) },
+      });
+      return res.json();
+    }
+    async function loadReminders() {
+      S.loading = true; render();
+      try {
+        const d = await api('');
+        if (d.success) S.reminders = d.reminders || [];
+        else showToast(d.error || 'Load failed', 'error');
+      } catch { showToast('Cannot reach server', 'error'); }
+      S.loading = false; render();
+    }
+    async function completeReminder(id) {
+      const el = document.querySelector('[data-id="' + id + '"]');
+      if (el) el.style.background = 'rgba(74,173,107,0.08)';
+      try {
+        await api('/' + id + '/complete', { method: 'POST' });
+        const r = S.reminders.find(x => x.id === id);
+        if (r) r.sent = true;
+        render();
+      } catch { showToast('Failed', 'error'); }
+    }
+    async function uncompleteReminder(id) {
+      try {
+        await api('/' + id, { method: 'PUT', body: JSON.stringify({ sent: false }) });
+        var r = S.reminders.find(function(x) { return x.id === id; });
+        if (r) r.sent = false;
+        render();
+        showToast('Marked as not done', 'success');
+      } catch { showToast('Failed', 'error'); }
+    }
+    async function deleteReminder(id) {
+      const el = document.querySelector('[data-id="' + id + '"]');
+      if (el) { el.classList.add('removing'); await new Promise(r => setTimeout(r, 280)); }
+      try {
+        await api('/' + id, { method: 'DELETE' });
+        S.reminders = S.reminders.filter(x => x.id !== id);
+        render();
+      } catch { showToast('Failed', 'error'); }
+    }
+    async function doCreate(form) {
+      try {
+        var d = await api('', { method: 'POST', body: JSON.stringify(form) });
+        if (d.success) {
+          showToast('Reminder created', 'success');
+          S.createMode = 'input'; S.parsedReminder = null; S.voiceText = '';
+          await loadReminders(); switchTab('today');
+        } else showToast(d.error || 'Failed', 'error');
+      } catch { showToast('Cannot reach server', 'error'); }
+    }
+
+    // ── Date utils ──
+    function parseD(s) {
+      if (!s) return new Date();
+      const parts = s.split(' ');
+      const dp = parts[0].split('/').map(Number);
+      const tp = parts[1].split(':').map(Number);
+      return new Date(dp[2], dp[0] - 1, dp[1], tp[0], tp[1]);
+    }
+    function fmtApi(d) {
+      return String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0') + '/' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+    function toDTL(d) {
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+    function dispTime(d) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tmrw = new Date(today); tmrw.setDate(today.getDate() + 1);
+      const rDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      if (rDay.getTime() === today.getTime()) return 'Today, ' + t;
+      if (rDay.getTime() === tmrw.getTime()) return 'Tomorrow, ' + t;
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + t;
+    }
+    function isToday(d) { const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); }
+    function isOverdue(r) { return !r.sent && parseD(r.eventTime) < new Date(); }
+    function greet() { const h = new Date().getHours(); return h < 12 ? 'Good morning,' : h < 17 ? 'Good afternoon,' : 'Good evening,'; }
+
+    // ── Toast ──
+    function showToast(msg, type) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast ' + (type || 'success') + ' show';
+      clearTimeout(el._tid);
+      el._tid = setTimeout(function() { el.classList.remove('show'); }, 2500);
+    }
+
+    // ── Tabs ──
+    function switchTab(tab) {
+      S.tab = tab;
+      S.detailId = null;
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+      document.getElementById('main').scrollTop = 0;
+      render();
+    }
+
+    // ── Escape user content for safe text display ──
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.textContent; }
+
+    // ── Build DOM nodes safely ──
+    function el(tag, attrs, children) {
+      var node = document.createElement(tag);
+      if (attrs) Object.keys(attrs).forEach(function(k) {
+        if (k === 'className') node.className = attrs[k];
+        else if (k === 'style' && typeof attrs[k] === 'object') Object.assign(node.style, attrs[k]);
+        else if (k === 'textContent') node.textContent = attrs[k];
+        else if (k.startsWith('on')) node.addEventListener(k.slice(2), attrs[k]);
+        else node.setAttribute(k, attrs[k]);
+      });
+      if (children) {
+        if (typeof children === 'string') node.textContent = children;
+        else if (Array.isArray(children)) children.forEach(function(c) { if (c) node.appendChild(c); });
+      }
+      return node;
+    }
+
+    function svgIcon(paths) {
+      var ns = 'http://www.w3.org/2000/svg';
+      var svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      paths.forEach(function(p) {
+        if (p.tag === 'circle') {
+          var c = document.createElementNS(ns, 'circle');
+          c.setAttribute('cx', p.cx); c.setAttribute('cy', p.cy); c.setAttribute('r', p.r);
+          if (p.fill) c.setAttribute('fill', p.fill);
+          svg.appendChild(c);
+        } else if (p.tag === 'line') {
+          var l = document.createElementNS(ns, 'line');
+          l.setAttribute('x1', p.x1); l.setAttribute('y1', p.y1);
+          l.setAttribute('x2', p.x2); l.setAttribute('y2', p.y2);
+          svg.appendChild(l);
+        } else if (p.tag === 'polyline') {
+          var pl = document.createElementNS(ns, 'polyline');
+          pl.setAttribute('points', p.points);
+          svg.appendChild(pl);
+        } else if (p.tag === 'path') {
+          var pa = document.createElementNS(ns, 'path');
+          pa.setAttribute('d', p.d);
+          svg.appendChild(pa);
+        }
+      });
+      return svg;
+    }
+
+    var refreshIcon = [
+      { tag: 'polyline', points: '23 4 23 10 17 10' },
+      { tag: 'polyline', points: '1 20 1 14 7 14' },
+      { tag: 'path', d: 'M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15' },
+    ];
+    var checkIcon = [{ tag: 'polyline', points: '20 6 9 17 4 12' }];
+    var xIcon = [
+      { tag: 'line', x1: '18', y1: '6', x2: '6', y2: '18' },
+      { tag: 'line', x1: '6', y1: '6', x2: '18', y2: '18' },
+    ];
+
+    // ── Render card DOM ──
+    function buildCard(r, idx) {
+      var d = parseD(r.eventTime);
+      var od = isOverdue(r);
+      var cat = CATS.find(function(c) { return c.key === r.category; });
+
+      var colorBar = el('div', { className: 'card-color', style: { background: catColor(r.category) } });
+
+      var priDot = el('div', { className: 'card-priority', style: { background: priColor(r.priority) } });
+      var titleEl = el('div', { className: 'card-title', textContent: esc(r.title) });
+      var topRow = el('div', { className: 'card-top' }, [priDot, titleEl]);
+
+      var bodyChildren = [topRow];
+      if (r.description) {
+        bodyChildren.push(el('div', { className: 'card-desc', textContent: esc(r.description) }));
+      }
+
+      var timeText = (od ? 'Overdue \u2014 ' : '') + dispTime(d);
+      var timeSpan = el('span', { className: od ? 'overdue-time' : '', textContent: timeText });
+      var badge = el('span', { className: 'card-badge', textContent: cat ? cat.label : r.category });
+      var meta = el('div', { className: 'card-meta' }, [timeSpan, badge]);
+      bodyChildren.push(meta);
+
+      // Alert time chips — show actual times
+      if (r.reminderTimes && r.reminderTimes.length && !r.sent) {
+        var alertDiv = el('div', { className: 'card-alerts' });
+        r.reminderTimes.forEach(function(rt) {
+          var alertTime = parseD(rt.reminderTime);
+          var timeStr = alertTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          alertDiv.appendChild(el('span', { className: 'card-alert-chip', textContent: timeStr }));
+        });
+        bodyChildren.push(alertDiv);
+      }
+
+      var body = el('div', { className: 'card-body' }, bodyChildren);
+      body.addEventListener('click', function() { openDetail(r.id); });
+
+      var actionBtns = [];
+      if (!r.sent) {
+        var chkSvg = svgIcon(checkIcon);
+        chkSvg.setAttribute('stroke-width', '2.5');
+        var completeBtn = el('button', { className: 'card-action complete-btn', title: 'Complete' }, [chkSvg]);
+        completeBtn.addEventListener('click', function(e) { e.stopPropagation(); completeReminder(r.id); });
+        actionBtns.push(completeBtn);
+      } else {
+        // Undo complete — mark as not done
+        var undoSvg = svgIcon([
+          { tag: 'polyline', points: '1 4 1 10 7 10' },
+          { tag: 'path', d: 'M3.51 15a9 9 0 1 0 2.13-9.36L1 10' },
+        ]);
+        var undoBtn = el('button', { className: 'card-action complete-btn', title: 'Undo' }, [undoSvg]);
+        undoBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          uncompleteReminder(r.id);
+        });
+        actionBtns.push(undoBtn);
+      }
+      var delBtn = el('button', { className: 'card-action delete-btn', title: 'Delete' }, [svgIcon(xIcon)]);
+      delBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteReminder(r.id); });
+      actionBtns.push(delBtn);
+
+      var actions = el('div', { className: 'card-actions' }, actionBtns);
+
+      var card = el('div', { className: 'card' + (r.sent ? ' completed' : ''), 'data-id': r.id }, [colorBar, body, actions]);
+      card.style.animationDelay = (idx * 0.03) + 's';
+      return card;
+    }
+
+    function buildSkeletons() {
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < 4; i++) frag.appendChild(el('div', { className: 'skeleton' }));
+      return frag;
+    }
+
+    function buildEmpty(title, sub) {
+      return el('div', { className: 'empty' }, [
+        el('div', { className: 'empty-title', textContent: title }),
+        el('div', { className: 'empty-sub', textContent: sub }),
+      ]);
+    }
+
+    function buildRefreshBtn() {
+      var btn = el('button', { className: 'icon-btn' + (S.loading ? ' spinning' : '') });
+      btn.appendChild(svgIcon(refreshIcon));
+      btn.addEventListener('click', loadReminders);
+      return btn;
+    }
+
+    // ── Today View ──
+    function renderToday(container) {
+      var name = S.userId.charAt(0).toUpperCase() + S.userId.slice(1);
+      var dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+      var greetDiv = el('div', { className: 'greeting' }, [
+        el('div', { className: 'greeting-sub', textContent: greet() }),
+        el('div', { className: 'greeting-name', textContent: name + '.' }),
+        el('div', { className: 'greeting-date', textContent: dateStr }),
+      ]);
+
+      var header = el('div', { className: 'view-header' }, [greetDiv, buildRefreshBtn()]);
+      container.appendChild(header);
+
+      if (S.loading) { container.appendChild(buildSkeletons()); return; }
+
+      var active = S.reminders.filter(function(r) { return !r.sent; });
+      var overdue = active.filter(isOverdue).sort(function(a, b) { return parseD(a.eventTime) - parseD(b.eventTime); });
+      var todayItems = active.filter(function(r) { return isToday(parseD(r.eventTime)) && !isOverdue(r); }).sort(function(a, b) { return parseD(a.eventTime) - parseD(b.eventTime); });
+
+      if (!overdue.length && !todayItems.length) {
+        container.appendChild(buildEmpty("You're all caught up.", 'No reminders for today.'));
+        return;
+      }
+
+      var idx = 0;
+      if (overdue.length) {
+        container.appendChild(el('div', { className: 'section-label overdue', textContent: 'Overdue' }));
+        var list = el('div', { className: 'card-list' });
+        overdue.forEach(function(r) { list.appendChild(buildCard(r, idx++)); });
+        container.appendChild(list);
+      }
+      if (todayItems.length) {
+        container.appendChild(el('div', { className: 'section-label', textContent: 'Today' }));
+        var list2 = el('div', { className: 'card-list' });
+        todayItems.forEach(function(r) { list2.appendChild(buildCard(r, idx++)); });
+        container.appendChild(list2);
+      }
+    }
+
+    // ── All View ──
+    function renderAll(container) {
+      var header = el('div', { className: 'view-header' }, [
+        el('div', { className: 'topbar-title', textContent: 'All Reminders' }),
+        buildRefreshBtn(),
+      ]);
+      container.appendChild(header);
+
+      // Category filter chips
+      var filtersDiv = el('div', { className: 'filters' });
+      var allChip = el('button', { className: 'chip' + (S.filterCat === null ? ' active' : ''), textContent: 'All' });
+      if (S.filterCat === null) { allChip.style.background = 'var(--accent)'; allChip.style.borderColor = 'transparent'; }
+      allChip.addEventListener('click', function() { S.filterCat = null; render(); });
+      filtersDiv.appendChild(allChip);
+
+      CATS.forEach(function(c) {
+        var chip = el('button', { className: 'chip' + (S.filterCat === c.key ? ' active' : ''), textContent: c.label });
+        if (S.filterCat === c.key) { chip.style.background = c.color; chip.style.borderColor = 'transparent'; }
+        chip.addEventListener('click', function() { S.filterCat = c.key; render(); });
+        filtersDiv.appendChild(chip);
+      });
+      container.appendChild(filtersDiv);
+
+      // Priority filter + completed toggle
+      var filterRow = el('div', { className: 'filter-row' });
+      var sel = document.createElement('select');
+      var optAll = document.createElement('option');
+      optAll.value = ''; optAll.textContent = 'All priorities';
+      sel.appendChild(optAll);
+      PRIS.forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p.key; opt.textContent = p.label;
+        if (S.filterPri === p.key) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', function() { S.filterPri = this.value || null; render(); });
+      filterRow.appendChild(sel);
+
+      var lbl = el('label');
+      var chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.checked = S.showCompleted;
+      chk.addEventListener('change', function() { S.showCompleted = this.checked; render(); });
+      lbl.appendChild(chk);
+      lbl.appendChild(document.createTextNode(' Hide completed'));
+      filterRow.appendChild(lbl);
+      container.appendChild(filterRow);
+
+      if (S.loading) { container.appendChild(buildSkeletons()); return; }
+
+      var items = S.reminders.slice();
+      if (S.filterCat) items = items.filter(function(r) { return r.category === S.filterCat; });
+      if (S.filterPri) items = items.filter(function(r) { return r.priority === S.filterPri; });
+      if (S.showCompleted) items = items.filter(function(r) { return !r.sent; });
+      items.sort(function(a, b) { return parseD(a.eventTime) - parseD(b.eventTime); });
+
+      if (!items.length) {
+        container.appendChild(buildEmpty('Nothing here.', 'Try changing filters or create a reminder.'));
+        return;
+      }
+
+      var cardList = el('div', { className: 'card-list' });
+      items.forEach(function(r, i) { cardList.appendChild(buildCard(r, i)); });
+      container.appendChild(cardList);
+    }
+
+    // ── Create View ──
+    function renderCreate(container) {
+      container.appendChild(el('div', { className: 'view-header', style: { marginBottom: '8px' } }, [
+        el('div', { className: 'topbar-title', textContent: 'New Reminder' }),
+      ]));
+
+      if (S.createMode === 'preview' && S.parsedReminder) {
+        renderCreatePreview(container);
+      } else {
+        renderCreateInput(container);
+      }
+      container.appendChild(el('div', { style: { height: '24px' } }));
+    }
+
+    // ── Recording timer ──
+    var recTimerInterval = null;
+    var recStartTime = 0;
+
+    function startRecTimer() {
+      recStartTime = Date.now();
+      clearInterval(recTimerInterval);
+      recTimerInterval = setInterval(function() {
+        var elapsed = Math.floor((Date.now() - recStartTime) / 1000);
+        var timerEl = document.getElementById('rec-timer');
+        if (timerEl) {
+          var m = Math.floor(elapsed / 60);
+          var s = elapsed % 60;
+          timerEl.textContent = m + ':' + String(s).padStart(2, '0');
+        }
+        // Animate waveform bars
+        var bars = document.querySelectorAll('.wave-bar');
+        bars.forEach(function(bar) {
+          var h = 4 + Math.random() * 32;
+          bar.style.height = h + 'px';
+        });
+      }, 120);
+    }
+
+    function stopRecTimer() {
+      clearInterval(recTimerInterval);
+      recTimerInterval = null;
+      // Flatten waveform
+      var bars = document.querySelectorAll('.wave-bar');
+      bars.forEach(function(bar) { bar.style.height = '6px'; });
+    }
+
+    // Patch startVoice/stopVoice to include timer
+    var _origStartVoice = startVoice;
+    startVoice = function() { _origStartVoice(); startRecTimer(); };
+    var _origStopVoice = stopVoice;
+    stopVoice = function() { _origStopVoice(); stopRecTimer(); };
+
+    var showTextMode = false;
+
+    function renderCreateInput(container) {
+      var micSvgPaths = [
+        { tag: 'path', d: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z' },
+        { tag: 'path', d: 'M19 10v2a7 7 0 0 1-14 0v-2' },
+        { tag: 'line', x1: '12', y1: '19', x2: '12', y2: '23' },
+        { tag: 'line', x1: '8', y1: '23', x2: '16', y2: '23' },
+      ];
+
+      var card = el('div', { className: 'recorder-card' });
+
+      // ── Mic with glow rings ──
+      var micWrap = el('div', { className: 'mic-wrap' + (S.recording ? ' recording' : '') });
+      micWrap.appendChild(el('div', { className: 'mic-ring mic-ring-1' }));
+      micWrap.appendChild(el('div', { className: 'mic-ring mic-ring-2' }));
+      micWrap.appendChild(el('div', { className: 'mic-ring mic-ring-3' }));
+      var micBtn = el('button', { className: 'mic-btn' + (S.recording ? ' recording' : '') });
+      var micIcon = svgIcon(micSvgPaths);
+      micBtn.appendChild(micIcon);
+      micBtn.addEventListener('click', function() { S.recording ? stopVoice() : startVoice(); });
+      if (!speechSupported) micBtn.style.opacity = '0.35';
+      micWrap.appendChild(micBtn);
+      card.appendChild(micWrap);
+
+      // ── Timer ──
+      var timerText = '0:00';
+      if (S.recording && recStartTime) {
+        var elapsed = Math.floor((Date.now() - recStartTime) / 1000);
+        timerText = Math.floor(elapsed / 60) + ':' + String(elapsed % 60).padStart(2, '0');
+      }
+      card.appendChild(el('div', {
+        className: 'rec-timer' + (S.recording ? ' active' : ''),
+        id: 'rec-timer',
+        textContent: S.recording ? timerText : (S.voiceText ? '' : '0:00'),
+      }));
+
+      // ── Waveform bars ──
+      var waveform = el('div', { className: 'waveform' + (S.recording ? ' active rec' : (S.voiceText ? ' active' : '')) });
+      for (var i = 0; i < 35; i++) {
+        var bar = el('div', { className: 'wave-bar' });
+        // Give idle bars a subtle shape like a static waveform
+        if (!S.recording && S.voiceText) {
+          var center = 17;
+          var dist = Math.abs(i - center) / center;
+          bar.style.height = (4 + (1 - dist) * 18 * (0.5 + Math.random() * 0.5)) + 'px';
+        }
+        waveform.appendChild(bar);
+      }
+      card.appendChild(waveform);
+
+      // ── Transcription ──
+      var transcriptArea = el('div', { className: 'transcript-area' });
+      if (S.voiceText) {
+        transcriptArea.appendChild(el('span', { textContent: S.voiceText }));
+      } else {
+        transcriptArea.appendChild(el('span', { className: 'transcript-placeholder', textContent: speechSupported ? 'Tap the mic and speak naturally...' : 'Use the text input below' }));
+      }
+      card.appendChild(transcriptArea);
+
+      // ── Bottom actions ──
+      var actions = el('div', { className: 'rec-actions' });
+
+      // Reset button
+      var resetBtn = el('button', { className: 'rec-action-btn rec-reset', title: 'Reset' });
+      var resetSvg = svgIcon([
+        { tag: 'polyline', points: '1 4 1 10 7 10' },
+        { tag: 'path', d: 'M3.51 15a9 9 0 1 0 2.13-9.36L1 10' },
+      ]);
+      resetBtn.appendChild(resetSvg);
+      resetBtn.addEventListener('click', function() {
+        if (S.recording) stopVoice();
+        S.voiceText = ''; showTextMode = false; render();
+      });
+      actions.appendChild(resetBtn);
+
+      // Status text
+      var statusText = S.parsing ? 'AI is thinking...' : (S.recording ? 'Recording...' : (S.voiceText ? 'Ready to send' : 'Tap mic to start'));
+      var statusEl = el('div', { className: 'rec-status' + (S.parsing ? ' thinking-text' : ''), textContent: statusText });
+      actions.appendChild(statusEl);
+
+      // Send button
+      var sendBtn = el('button', { className: 'rec-action-btn rec-send' + (S.parsing ? ' thinking' : ''), title: 'Send to AI' });
+      var sendSvg = svgIcon([{ tag: 'line', x1: '22', y1: '2', x2: '11', y2: '13' }, { tag: 'path', d: 'M22 2L15 22L11 13L2 9L22 2' }]);
+      sendBtn.appendChild(sendSvg);
+      if (!S.voiceText.trim() || S.parsing) sendBtn.disabled = true;
+      sendBtn.addEventListener('click', function() {
+        if (S.recording) stopVoice();
+        parseWithAI();
+      });
+      actions.appendChild(sendBtn);
+
+      card.appendChild(actions);
+      container.appendChild(card);
+
+      // ── Text mode toggle ──
+      if (!S.recording) {
+        var toggleBtn = el('button', { className: 'text-toggle' });
+        var kbIcon = svgIcon([
+          { tag: 'path', d: 'M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z' },
+          { tag: 'line', x1: '6', y1: '8', x2: '6', y2: '8' }, { tag: 'line', x1: '10', y1: '8', x2: '10', y2: '8' },
+          { tag: 'line', x1: '14', y1: '8', x2: '14', y2: '8' }, { tag: 'line', x1: '18', y1: '8', x2: '18', y2: '8' },
+          { tag: 'line', x1: '6', y1: '12', x2: '6', y2: '12' }, { tag: 'line', x1: '18', y1: '12', x2: '18', y2: '12' },
+          { tag: 'line', x1: '8', y1: '16', x2: '16', y2: '16' },
+        ]);
+        toggleBtn.appendChild(kbIcon);
+        toggleBtn.appendChild(document.createTextNode(showTextMode ? 'Hide keyboard' : 'Type instead'));
+        toggleBtn.addEventListener('click', function() { showTextMode = !showTextMode; render(); });
+        container.appendChild(toggleBtn);
+      }
+
+      // ── Text input (togglable) ──
+      if (showTextMode && !S.recording) {
+        var textArea = el('div', { className: 'text-input-area' });
+        var ta = document.createElement('textarea');
+        ta.className = 'voice-text'; ta.id = 'voice-textarea';
+        ta.placeholder = 'Type your reminder... e.g. "Submit homework by Friday 3pm, really important"';
+        ta.value = S.voiceText;
+        ta.addEventListener('input', function() { S.voiceText = this.value; });
+        textArea.appendChild(ta);
+
+        var parseBtn = el('button', { className: 'parse-btn', textContent: S.parsing ? 'AI is thinking...' : 'Create with AI' });
+        if (S.parsing || !S.voiceText.trim()) parseBtn.disabled = true;
+        parseBtn.addEventListener('click', parseWithAI);
+        textArea.appendChild(parseBtn);
+        container.appendChild(textArea);
+      }
+    }
+
+    function renderCreatePreview(container) {
+      var p = S.parsedReminder;
+      container.appendChild(el('div', { className: 'hint', style: { marginBottom: '8px' }, textContent: 'AI parsed your reminder. Review and adjust if needed.' }));
+
+      var card = el('div', { className: 'preview-card' });
+
+      // Title
+      var titleField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Title' })]);
+      var titleInput = el('input', { className: 'form-input', id: 'p-title', value: p.title });
+      titleField.appendChild(titleInput);
+      card.appendChild(titleField);
+
+      // Description
+      if (p.description) {
+        var descField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Description' })]);
+        var descInput = el('input', { className: 'form-input', id: 'p-desc', value: p.description });
+        descField.appendChild(descInput);
+        card.appendChild(descField);
+      }
+
+      // Category
+      var catField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Category' })]);
+      var catPicker = el('div', { className: 'chip-group', id: 'cat-picker' });
+      CATS.forEach(function(c) {
+        var chip = el('button', { className: 'chip-option' + (p.category === c.key ? ' selected' : ''), 'data-val': c.key, type: 'button', textContent: c.label });
+        if (p.category === c.key) { chip.style.background = c.color; chip.style.borderColor = 'transparent'; }
+        chip.addEventListener('click', function() { pickChip('cat-picker', c.key, c.color); });
+        catPicker.appendChild(chip);
+      });
+      catField.appendChild(catPicker);
+      card.appendChild(catField);
+
+      // Priority
+      var priField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Priority' })]);
+      var priPicker = el('div', { className: 'chip-group', id: 'pri-picker' });
+      PRIS.forEach(function(pr) {
+        var chip = el('button', { className: 'chip-option' + (p.priority === pr.key ? ' selected' : ''), 'data-val': pr.key, type: 'button', textContent: pr.label });
+        if (p.priority === pr.key) { chip.style.background = pr.color; chip.style.borderColor = 'transparent'; }
+        chip.addEventListener('click', function() { pickChip('pri-picker', pr.key, pr.color); });
+        priPicker.appendChild(chip);
+      });
+      priField.appendChild(priPicker);
+      card.appendChild(priField);
+
+      // Date/time
+      var dtField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'When' })]);
+      var dtInput = el('input', { className: 'form-input', type: 'datetime-local', id: 'p-time', value: toDTL(parseD(p.eventTime)) });
+      dtField.appendChild(dtInput);
+      card.appendChild(dtField);
+
+      // Alert times
+      if (p.reminderTimes && p.reminderTimes.length) {
+        var alertField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Reminders' })]);
+        var alertChips = el('div', { className: 'alert-chips', id: 'alert-chips' });
+        p.reminderTimes.forEach(function(rt, i) {
+          var chip = el('span', { className: 'alert-chip' });
+          chip.appendChild(document.createTextNode(rt.label));
+          var xBtn = el('button', { className: 'alert-chip-x', textContent: '\u00d7' });
+          xBtn.addEventListener('click', function() {
+            S.parsedReminder.reminderTimes.splice(i, 1);
+            render();
+          });
+          chip.appendChild(xBtn);
+          alertChips.appendChild(chip);
+        });
+        alertField.appendChild(alertChips);
+        card.appendChild(alertField);
+      }
+
+      container.appendChild(card);
+
+      // Action buttons
+      var btnRow = el('div', { className: 'btn-row' });
+      var backBtn = el('button', { className: 'btn-secondary', textContent: 'Start Over' });
+      backBtn.addEventListener('click', function() {
+        S.createMode = 'input'; S.parsedReminder = null; S.voiceText = '';
+        render();
+      });
+      btnRow.appendChild(backBtn);
+
+      var createBtn = el('button', { className: 'btn-primary', id: 'create-btn', textContent: 'Create Reminder' });
+      createBtn.addEventListener('click', function() {
+        var title = document.getElementById('p-title').value.trim();
+        if (!title) return;
+        var descEl = document.getElementById('p-desc');
+        var desc = descEl ? descEl.value.trim() : (p.description || '');
+        var catEl = document.querySelector('#cat-picker .selected');
+        var priEl = document.querySelector('#pri-picker .selected');
+        var cat = catEl ? catEl.getAttribute('data-val') : p.category;
+        var pri = priEl ? priEl.getAttribute('data-val') : p.priority;
+        var dt = document.getElementById('p-time').value;
+        var date = dt ? new Date(dt) : parseD(p.eventTime);
+        createBtn.disabled = true; createBtn.textContent = 'Creating...';
+        doCreate({
+          title: title, description: desc, category: cat, priority: pri,
+          eventTime: fmtApi(date),
+          reminderTimes: S.parsedReminder.reminderTimes || [],
+        });
+      });
+      btnRow.appendChild(createBtn);
+      container.appendChild(btnRow);
+    }
+
+    function pickChip(gid, val, color) {
+      var g = document.getElementById(gid);
+      g.querySelectorAll('.chip-option').forEach(function(c) { c.classList.remove('selected'); c.style.background = ''; c.style.borderColor = ''; });
+      var btn = g.querySelector('[data-val="' + val + '"]');
+      btn.classList.add('selected'); btn.style.background = color; btn.style.borderColor = 'transparent';
+    }
+
+    // ── Settings View ──
+    function renderSettings(container) {
+      container.appendChild(el('div', { className: 'view-header', style: { marginBottom: '16px' } }, [
+        el('div', { className: 'topbar-title', textContent: 'Settings' }),
+      ]));
+
+      // Account
+      var acctSection = el('div', { className: 'settings-section' });
+      acctSection.appendChild(el('div', { className: 'settings-heading', textContent: 'Account' }));
+      var acctCard = el('div', { className: 'settings-card' });
+      var acctRow = el('div', { className: 'settings-row' }, [el('label', { textContent: 'User ID' })]);
+      var userInput = document.createElement('input');
+      userInput.type = 'text'; userInput.id = 's-user'; userInput.value = S.userId; userInput.placeholder = 'your name';
+      userInput.addEventListener('change', saveSettings);
+      acctRow.appendChild(userInput);
+      acctCard.appendChild(acctRow);
+      acctSection.appendChild(acctCard);
+      acctSection.appendChild(el('div', { className: 'hint', textContent: 'Your user ID keeps your reminders separate.' }));
+      container.appendChild(acctSection);
+
+      // Server
+      var srvSection = el('div', { className: 'settings-section' });
+      srvSection.appendChild(el('div', { className: 'settings-heading', textContent: 'Server' }));
+      var srvCard = el('div', { className: 'settings-card' });
+      var srvRow = el('div', { className: 'settings-row' }, [el('label', { textContent: 'URL' })]);
+      var urlInput = document.createElement('input');
+      urlInput.type = 'text'; urlInput.id = 's-url'; urlInput.value = S.baseURL; urlInput.placeholder = '(same origin)';
+      urlInput.addEventListener('change', saveSettings);
+      srvRow.appendChild(urlInput);
+      srvCard.appendChild(srvRow);
+      srvSection.appendChild(srvCard);
+      srvSection.appendChild(el('div', { className: 'hint', textContent: 'Leave blank to use current server.' }));
+      container.appendChild(srvSection);
+
+      // Appearance
+      var appSection = el('div', { className: 'settings-section' });
+      appSection.appendChild(el('div', { className: 'settings-heading', textContent: 'Appearance' }));
+      var appCard = el('div', { className: 'settings-card' });
+      var appRow = el('div', { className: 'settings-row' }, [el('label', { textContent: 'Dark Mode' })]);
+      var toggle = el('button', { className: 'toggle' + (S.dark ? ' on' : '') });
+      toggle.addEventListener('click', toggleDark);
+      appRow.appendChild(toggle);
+      appCard.appendChild(appRow);
+      appSection.appendChild(appCard);
+      container.appendChild(appSection);
+
+      // About
+      var aboutSection = el('div', { className: 'settings-section' });
+      aboutSection.appendChild(el('div', { className: 'settings-heading', textContent: 'About' }));
+      var aboutCard = el('div', { className: 'settings-card' });
+      var verRow = el('div', { className: 'settings-row' }, [el('label', { textContent: 'Version' }), el('span', { className: 'value', textContent: '2.0.0' })]);
+      var beRow = el('div', { className: 'settings-row' }, [el('label', { textContent: 'Backend' }), el('span', { className: 'value', textContent: 'SQLite + FastAPI' })]);
+      aboutCard.appendChild(verRow); aboutCard.appendChild(beRow);
+      aboutSection.appendChild(aboutCard);
+      container.appendChild(aboutSection);
+    }
+
+    // ── Detail View ──
+    function openDetail(id) {
+      S.detailId = id;
+      render();
+    }
+
+    function closeDetail() {
+      S.detailId = null;
+      render();
+    }
+
+    async function saveDetail() {
+      var r = S.reminders.find(function(x) { return x.id === S.detailId; });
+      if (!r) return;
+
+      var titleEl = document.getElementById('d-title');
+      var descEl = document.getElementById('d-desc');
+      var catEl = document.querySelector('#d-cat-picker .selected');
+      var priEl = document.querySelector('#d-pri-picker .selected');
+      var timeEl = document.getElementById('d-time');
+
+      var title = titleEl ? titleEl.value.trim() : r.title;
+      var desc = descEl ? descEl.value.trim() : r.description;
+      var cat = catEl ? catEl.getAttribute('data-val') : r.category;
+      var pri = priEl ? priEl.getAttribute('data-val') : r.priority;
+      var dt = timeEl ? timeEl.value : '';
+      var eventTime = dt ? fmtApi(new Date(dt)) : r.eventTime;
+
+      try {
+        var d = await api('/' + r.id, {
+          method: 'PUT',
+          body: JSON.stringify({ title: title, description: desc, category: cat, priority: pri, eventTime: eventTime }),
+        });
+        if (d.success) {
+          showToast('Reminder updated', 'success');
+          await loadReminders();
+          render();
+        } else { showToast(d.error || 'Update failed', 'error'); }
+      } catch { showToast('Cannot reach server', 'error'); }
+    }
+
+    function renderDetail(container) {
+      var r = S.reminders.find(function(x) { return x.id === S.detailId; });
+      if (!r) { closeDetail(); return; }
+
+      var d = parseD(r.eventTime);
+      var od = isOverdue(r);
+      var cat = CATS.find(function(c) { return c.key === r.category; });
+
+      // Back button
+      var backBtn = el('button', { className: 'detail-back' });
+      var backSvg = svgIcon([{ tag: 'polyline', points: '15 18 9 12 15 6' }]);
+      backBtn.appendChild(backSvg);
+      backBtn.appendChild(document.createTextNode('Back'));
+      backBtn.addEventListener('click', closeDetail);
+
+      var header = el('div', { className: 'detail-header' });
+      header.appendChild(backBtn);
+      container.appendChild(header);
+
+      // Status banner
+      if (r.sent) {
+        container.appendChild(el('div', { className: 'detail-status completed-status', textContent: 'Completed' }));
+      } else if (od) {
+        container.appendChild(el('div', { className: 'detail-status overdue-status', textContent: 'Overdue' }));
+      }
+
+      // Detail card
+      var card = el('div', { className: 'detail-card' });
+      var colorBar = el('div', { className: 'detail-color-bar', style: { background: catColor(r.category) } });
+      card.appendChild(colorBar);
+
+      var inner = el('div', { className: 'detail-inner' });
+
+      // Title
+      var titleField = el('div', { className: 'detail-field' });
+      titleField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Title' }));
+      var titleInput = document.createElement('input');
+      titleInput.className = 'detail-title-input'; titleInput.id = 'd-title'; titleInput.value = r.title;
+      titleField.appendChild(titleInput);
+      inner.appendChild(titleField);
+
+      // Description
+      var descField = el('div', { className: 'detail-field' });
+      descField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Description' }));
+      var descInput = document.createElement('textarea');
+      descInput.className = 'detail-desc-input'; descInput.id = 'd-desc'; descInput.value = r.description || '';
+      descInput.placeholder = 'Add a description...';
+      descInput.rows = 2;
+      descField.appendChild(descInput);
+      inner.appendChild(descField);
+
+      // Category
+      var catField = el('div', { className: 'detail-field' });
+      catField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Category' }));
+      var catPicker = el('div', { className: 'chip-group', id: 'd-cat-picker' });
+      CATS.forEach(function(c) {
+        var chip = el('button', { className: 'chip-option' + (r.category === c.key ? ' selected' : ''), 'data-val': c.key, type: 'button', textContent: c.label });
+        if (r.category === c.key) { chip.style.background = c.color; chip.style.borderColor = 'transparent'; }
+        chip.addEventListener('click', function() { pickChip('d-cat-picker', c.key, c.color); });
+        catPicker.appendChild(chip);
+      });
+      catField.appendChild(catPicker);
+      inner.appendChild(catField);
+
+      // Priority
+      var priField = el('div', { className: 'detail-field' });
+      priField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Priority' }));
+      var priPicker = el('div', { className: 'chip-group', id: 'd-pri-picker' });
+      PRIS.forEach(function(pr) {
+        var chip = el('button', { className: 'chip-option' + (r.priority === pr.key ? ' selected' : ''), 'data-val': pr.key, type: 'button', textContent: pr.label });
+        if (r.priority === pr.key) { chip.style.background = pr.color; chip.style.borderColor = 'transparent'; }
+        chip.addEventListener('click', function() { pickChip('d-pri-picker', pr.key, pr.color); });
+        priPicker.appendChild(chip);
+      });
+      priField.appendChild(priPicker);
+      inner.appendChild(priField);
+
+      // Event time
+      var timeField = el('div', { className: 'detail-field' });
+      timeField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Event Time' }));
+      var timeInput = el('input', { className: 'detail-time-input', type: 'datetime-local', id: 'd-time', value: toDTL(d) });
+      timeField.appendChild(timeInput);
+      inner.appendChild(timeField);
+
+      // Reminder alerts
+      if (r.reminderTimes && r.reminderTimes.length) {
+        var alertField = el('div', { className: 'detail-field' });
+        alertField.appendChild(el('div', { className: 'detail-field-label', textContent: 'Reminder Alerts' }));
+
+        r.reminderTimes.forEach(function(rt) {
+          var alertTime = parseD(rt.reminderTime);
+          var mins = rt.offsetMinutes;
+          var lbl = mins >= 1440 ? Math.floor(mins/1440) + ' day' + (Math.floor(mins/1440) > 1 ? 's' : '') + ' before'
+                  : mins >= 60 ? Math.floor(mins/60) + ' hour' + (Math.floor(mins/60) > 1 ? 's' : '') + ' before'
+                  : mins + ' min before';
+
+          var row = el('div', { className: 'detail-alert-row' });
+          var info = el('div');
+          info.appendChild(el('div', { className: 'detail-alert-label', textContent: lbl }));
+          info.appendChild(el('div', { className: 'detail-alert-time', textContent: dispTime(alertTime) }));
+          row.appendChild(info);
+          alertField.appendChild(row);
+        });
+
+        inner.appendChild(alertField);
+      } else if (!r.sent) {
+        var noAlerts = el('div', { className: 'detail-field' });
+        noAlerts.appendChild(el('div', { className: 'detail-field-label', textContent: 'Reminder Alerts' }));
+        noAlerts.appendChild(el('div', { className: 'hint', style: { padding: '0' }, textContent: 'No reminder alerts set for this item.' }));
+        inner.appendChild(noAlerts);
+      }
+
+      card.appendChild(inner);
+      container.appendChild(card);
+
+      // Action buttons
+      var actions = el('div', { className: 'detail-actions' });
+
+      if (!r.sent) {
+        var complBtn = el('button', { className: 'btn-secondary', textContent: 'Mark Complete' });
+        complBtn.addEventListener('click', function() {
+          completeReminder(r.id).then(function() { render(); });
+        });
+        actions.appendChild(complBtn);
+      }
+
+      var saveBtn = el('button', { className: 'btn-primary', textContent: 'Save Changes' });
+      saveBtn.addEventListener('click', saveDetail);
+      actions.appendChild(saveBtn);
+
+      container.appendChild(actions);
+
+      // Delete at bottom
+      var delBtn = el('button', {
+        className: 'detail-back',
+        style: { color: 'var(--danger)', marginTop: '16px' },
+      });
+      delBtn.appendChild(document.createTextNode('Delete this reminder'));
+      delBtn.addEventListener('click', function() {
+        deleteReminder(r.id).then(function() { closeDetail(); });
+      });
+      container.appendChild(delBtn);
+
+      container.appendChild(el('div', { style: { height: '24px' } }));
+    }
+
+    function saveSettings() {
+      var u = document.getElementById('s-user');
+      var url = document.getElementById('s-url');
+      if (u && u.value.trim()) { S.userId = u.value.trim(); localStorage.setItem('userId', S.userId); }
+      if (url) { S.baseURL = url.value.trim(); localStorage.setItem('baseURL', S.baseURL); }
+      loadReminders();
+    }
+    function toggleDark() { S.dark = !S.dark; localStorage.setItem('dark', S.dark ? '1' : '0'); applyTheme(); render(); }
+    function applyTheme() { document.documentElement.setAttribute('data-theme', S.dark ? 'dark' : ''); }
+
+    // ── Main render ──
+    function render() {
+      var m = document.getElementById('main');
+      m.textContent = '';
+      if (S.detailId) {
+        renderDetail(m);
+        return;
+      }
+      switch (S.tab) {
+        case 'today': renderToday(m); break;
+        case 'all': renderAll(m); break;
+        case 'create': renderCreate(m); break;
+        case 'settings': renderSettings(m); break;
+      }
+    }
+
+    function bindEvents() {
+      document.querySelectorAll('.tab').forEach(function(t) {
+        t.onclick = function() { switchTab(t.dataset.tab); };
+      });
+    }
+
+    // ── Notification polling ──
+    function checkAlerts() {
+      if (!S.userId) return;
+      api('/due-alerts').then(function(res) {
+        if (res.success && res.alerts && res.alerts.length > 0) {
+          res.alerts.forEach(function(a) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('Reminder: ' + a.title, { body: a.description || a.category, tag: 'reminder-' + a.id });
+            }
+            var markUrl = (S.baseURL || location.origin).replace(/\/+$/, '') + '/webhook/api/reminder-times/' + a.id + '/mark-sent';
+            fetch(markUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': S.userId } }).catch(function() {});
+          });
+        }
+      }).catch(function() {});
+    }
+
+    // ── Init ──
+    applyTheme();
+    bindEvents();
+    render();
+    loadReminders();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function() {});
+    if ('Notification' in window && Notification.permission === 'default') { Notification.requestPermission(); }
+    setInterval(checkAlerts, 60000);
+    checkAlerts();
+  </script>
+</body>
+</html>
