@@ -1197,24 +1197,55 @@
       dtField.appendChild(dtInput);
       card.appendChild(dtField);
 
-      // Alert times
-      if (p.reminderTimes && p.reminderTimes.length) {
-        var alertField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Reminders' })]);
-        var alertChips = el('div', { className: 'alert-chips', id: 'alert-chips' });
-        p.reminderTimes.forEach(function(rt, i) {
-          var chip = el('span', { className: 'alert-chip' });
-          chip.appendChild(document.createTextNode(rt.label));
-          var xBtn = el('button', { className: 'alert-chip-x', textContent: '\u00d7' });
-          xBtn.addEventListener('click', function() {
-            S.parsedReminder.reminderTimes.splice(i, 1);
-            render();
-          });
-          chip.appendChild(xBtn);
-          alertChips.appendChild(chip);
+      // Alert times (editable datetime pickers)
+      var alertField = el('div', { className: 'preview-field' }, [el('label', { className: 'form-label', textContent: 'Reminder Alerts' })]);
+
+      if (!p.reminderTimes) p.reminderTimes = [];
+
+      p.reminderTimes.forEach(function(rt, i) {
+        var eventDt = parseD(p.eventTime);
+        var alertDt = new Date(eventDt.getTime() - rt.offsetMinutes * 60000);
+
+        var row = el('div', { className: 'detail-alert-row' });
+        var timeInput = el('input', {
+          className: 'detail-time-input',
+          type: 'datetime-local',
+          value: toDTL(alertDt),
+          style: { flex: '1' },
         });
-        alertField.appendChild(alertChips);
-        card.appendChild(alertField);
-      }
+        timeInput.addEventListener('change', function() {
+          var newDate = new Date(this.value);
+          var evtEl = document.getElementById('p-time');
+          var evtDate = evtEl ? new Date(evtEl.value) : eventDt;
+          var newOffset = Math.round((evtDate - newDate) / 60000);
+          S.parsedReminder.reminderTimes[i].offsetMinutes = newOffset;
+          S.parsedReminder.reminderTimes[i].label = offsetToLabel(newOffset);
+        });
+        row.appendChild(timeInput);
+
+        var removeBtn = el('button', { className: 'detail-alert-remove', textContent: '\u00d7' });
+        removeBtn.addEventListener('click', function() {
+          S.parsedReminder.reminderTimes.splice(i, 1);
+          render();
+        });
+        row.appendChild(removeBtn);
+        alertField.appendChild(row);
+      });
+
+      // Add alert button
+      var addAlertBtn = el('button', { className: 'detail-add-alert' });
+      var plusSvg2 = svgIcon([
+        { tag: 'line', x1: '12', y1: '5', x2: '12', y2: '19' },
+        { tag: 'line', x1: '5', y1: '12', x2: '19', y2: '12' },
+      ]);
+      addAlertBtn.appendChild(plusSvg2);
+      addAlertBtn.appendChild(document.createTextNode('Add reminder alert'));
+      addAlertBtn.addEventListener('click', function() {
+        S.parsedReminder.reminderTimes.push({ offsetMinutes: 60, label: '1 hour before' });
+        render();
+      });
+      alertField.appendChild(addAlertBtn);
+      card.appendChild(alertField);
 
       container.appendChild(card);
 
@@ -1248,6 +1279,12 @@
       });
       btnRow.appendChild(createBtn);
       container.appendChild(btnRow);
+    }
+
+    function offsetToLabel(mins) {
+      if (mins >= 1440) return Math.floor(mins / 1440) + ' day' + (Math.floor(mins / 1440) > 1 ? 's' : '') + ' before';
+      if (mins >= 60) return Math.floor(mins / 60) + ' hour' + (Math.floor(mins / 60) > 1 ? 's' : '') + ' before';
+      return mins + ' min before';
     }
 
     function pickChip(gid, val, color) {
