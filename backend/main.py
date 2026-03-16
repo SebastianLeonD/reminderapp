@@ -159,8 +159,8 @@ def list_reminders(
     return {"success": True, "count": len(reminders), "reminders": reminders, "error": None}
 
 
-# --- DUE ALERTS (must be before {reminder_id} routes) ---
-@app.get("/webhook/api/reminders/due-alerts")
+# --- DUE ALERTS (separate path to avoid {reminder_id} conflict) ---
+@app.get("/webhook/api/due-alerts")
 def get_due_alerts(x_user_id: str = Header(...)):
     now = datetime.now().strftime(TZ_FORMAT)
     conn = get_db()
@@ -372,25 +372,36 @@ Rules for reminder_offsets:
 Return ONLY valid JSON, no markdown fences."""
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-                json={
-                    "contents": [
-                        {"role": "user", "parts": [{"text": prompt + "\n\nUser said: " + text}]}
-                    ],
-                    "generationConfig": {
-                        "temperature": 0.1,
-                        "responseMimeType": "application/json",
-                    },
-                },
-            )
+        resp = None
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.post(
+                        f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+                        json={
+                            "contents": [
+                                {"role": "user", "parts": [{"text": prompt + "\n\nUser said: " + text}]}
+                            ],
+                            "generationConfig": {
+                                "temperature": 0.1,
+                                "responseMimeType": "application/json",
+                            },
+                        },
+                    )
+                if resp.status_code == 200:
+                    break
+            except Exception:
+                if attempt == 1:
+                    raise
 
-        if resp.status_code != 200:
-            raise Exception(f"Gemini API returned {resp.status_code}")
+        if not resp or resp.status_code != 200:
+            raise Exception(f"Gemini API returned {resp.status_code if resp else 'no response'}: {resp.text[:200] if resp else ''}")
 
         gemini_data = resp.json()
-        raw_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = gemini_data.get("candidates", [])
+        if not candidates:
+            raise Exception("Gemini returned no candidates")
+        raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "{}")
         parsed = json.loads(raw_text)
 
         # Validate and normalize

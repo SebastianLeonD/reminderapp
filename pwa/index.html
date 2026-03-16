@@ -1593,7 +1593,8 @@
     // ── Notification polling ──
     function checkAlerts() {
       if (!S.userId) return;
-      api('/due-alerts').then(function(res) {
+      var alertUrl = (S.baseURL || location.origin).replace(/\/+$/, '') + '/webhook/api/due-alerts';
+      fetch(alertUrl, { headers: { 'Content-Type': 'application/json', 'x-user-id': S.userId } }).then(function(r) { return r.json(); }).then(function(res) {
         if (res.success && res.alerts && res.alerts.length > 0) {
           res.alerts.forEach(function(a) {
             if ('Notification' in window && Notification.permission === 'granted') {
