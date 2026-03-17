@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reminders-v6';
+const CACHE_NAME = 'reminders-v7';
 
 self.addEventListener('install', function(e) {
   self.skipWaiting();

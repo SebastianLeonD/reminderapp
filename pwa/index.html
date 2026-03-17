@@ -348,20 +348,6 @@
     }
     .rec-status.thinking-text { color: var(--accent); }
 
-    /* Text mode toggle */
-    .text-toggle {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      margin-top: 14px; padding: 8px 16px; border: none; background: none;
-      color: var(--text3); font-family: var(--font-body); font-size: 13px;
-      cursor: pointer; transition: color 0.15s;
-    }
-    .text-toggle:hover { color: var(--text2); }
-    .text-toggle svg { width: 16px; height: 16px; }
-
-    /* Text input mode */
-    .text-input-area {
-      width: 100%; margin-top: 12px;
-    }
     .voice-text {
       width: 100%; min-height: 90px; padding: 12px 14px;
       font-family: var(--font-body); font-size: 15px; color: var(--text);
@@ -1032,8 +1018,6 @@
     var _origStopVoice = stopVoice;
     stopVoice = function() { _origStopVoice(); stopRecTimer(); };
 
-    var showTextMode = false;
-
     function renderCreateInput(container) {
       var micSvgPaths = [
         { tag: 'path', d: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z' },
@@ -1104,7 +1088,7 @@
       resetBtn.appendChild(resetSvg);
       resetBtn.addEventListener('click', function() {
         if (S.recording) stopVoice();
-        S.voiceText = ''; showTextMode = false; render();
+        S.voiceText = ''; render();
       });
       actions.appendChild(resetBtn);
 
@@ -1127,38 +1111,6 @@
       card.appendChild(actions);
       container.appendChild(card);
 
-      // ── Text mode toggle ──
-      if (!S.recording) {
-        var toggleBtn = el('button', { className: 'text-toggle' });
-        var kbIcon = svgIcon([
-          { tag: 'path', d: 'M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z' },
-          { tag: 'line', x1: '6', y1: '8', x2: '6', y2: '8' }, { tag: 'line', x1: '10', y1: '8', x2: '10', y2: '8' },
-          { tag: 'line', x1: '14', y1: '8', x2: '14', y2: '8' }, { tag: 'line', x1: '18', y1: '8', x2: '18', y2: '8' },
-          { tag: 'line', x1: '6', y1: '12', x2: '6', y2: '12' }, { tag: 'line', x1: '18', y1: '12', x2: '18', y2: '12' },
-          { tag: 'line', x1: '8', y1: '16', x2: '16', y2: '16' },
-        ]);
-        toggleBtn.appendChild(kbIcon);
-        toggleBtn.appendChild(document.createTextNode(showTextMode ? 'Hide keyboard' : 'Type instead'));
-        toggleBtn.addEventListener('click', function() { showTextMode = !showTextMode; render(); });
-        container.appendChild(toggleBtn);
-      }
-
-      // ── Text input (togglable) ──
-      if (showTextMode && !S.recording) {
-        var textArea = el('div', { className: 'text-input-area' });
-        var ta = document.createElement('textarea');
-        ta.className = 'voice-text'; ta.id = 'voice-textarea';
-        ta.placeholder = 'Type your reminder... e.g. "Submit homework by Friday 3pm, really important"';
-        ta.value = S.voiceText;
-        ta.addEventListener('input', function() { S.voiceText = this.value; });
-        textArea.appendChild(ta);
-
-        var parseBtn = el('button', { className: 'parse-btn', textContent: S.parsing ? 'AI is thinking...' : 'Create with AI' });
-        if (S.parsing || !S.voiceText.trim()) parseBtn.disabled = true;
-        parseBtn.addEventListener('click', parseWithAI);
-        textArea.appendChild(parseBtn);
-        container.appendChild(textArea);
-      }
     }
 
     function renderCreatePreview(container) {
