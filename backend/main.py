@@ -118,13 +118,19 @@ def row_to_dict(row, conn=None):
 
 
 def insert_reminder_times(conn, reminder_id, event_time_str, reminder_times_list):
-    """Insert reminder_times rows. Each item has offsetMinutes."""
+    """Insert reminder_times rows. Each item has offsetMinutes. Always includes event time (offset=0)."""
     try:
         event_dt = datetime.strptime(event_time_str, TZ_FORMAT)
     except ValueError:
         return
 
     now = datetime.now()
+
+    # Ensure offset=0 (at event time) is always included
+    offsets_present = {rt.get("offsetMinutes", 0) for rt in reminder_times_list}
+    if 0 not in offsets_present:
+        reminder_times_list = list(reminder_times_list) + [{"offsetMinutes": 0}]
+
     for rt in reminder_times_list:
         offset = rt.get("offsetMinutes", 0)
         alert_dt = event_dt - timedelta(minutes=offset)
