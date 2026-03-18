@@ -4,6 +4,16 @@ A voice-first, AI-powered reminder app. Speak naturally, and AI handles the rest
 
 Built for personal use. Simple stack, no cloud services, runs on any machine.
 
+## Demo
+
+https://github.com/user-attachments/assets/WholeAppInUse.MP4
+
+## Screenshots
+
+| Today's Reminders | Create with Voice | Reminder Detail |
+|---|---|---|
+| ![Today's Reminders](Today'sRemindersPage.PNG) | ![Create Reminder](MakeReminderPage.PNG) | ![Inside Reminder](InsideReminderPage.PNG) |
+
 ## Features
 
 - **Voice-first creation** — tap the mic, speak your reminder, AI parses everything

@@ -26,6 +26,8 @@ reminderapp3/
 # Node
 node_modules/
 
-# Misc
-*.json
-!pwa/manifest.json
+# Old n8n/Telegram configs
+Reminder Checker.json
+Reminders API.json
+Telegram reminder bot.json
+*.txt
